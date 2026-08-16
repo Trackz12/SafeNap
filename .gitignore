@@ -15,3 +15,7 @@ __pycache__/
 htmlcov/
 tools/
 backend/client_errors.log
+backend/build/
+backend/dist/
+backend/*.spec
+backend/safenap_shared.json

@@ -60,13 +60,22 @@ O usuário pode confirmar que está acordado via UI (`ALARM_ACKNOWLEDGED`), que 
 | `standard` (padrão) | 1500ms | 25% / 45% | 5s | aspect 0.65 | 3 |
 | `strict` (alta) | 1000ms | 20% / 38% | 4s | aspect 0.60 | 2 |
 
-## Calibração (bifásica — aberto + fechado)
+## Calibração (bifásica — aberto + fechado, guiada por wizard)
 
-A calibração roda **automaticamente ao ligar a câmera** e pode ser re-executada a qualquer momento pelo painel (botão desabilitado com a câmera desligada). Ela mede **duas fases** para calcular o threshold ideal:
+A calibração é **obrigatória para alertas precisos** e acontece via um **wizard guiado** (`CalibrationWizard.tsx`) que abre automaticamente como overlay sobre a câmera assim que ela é iniciada. O fluxo conduz o usuário passo a passo:
 
-1. **Fase 1 — Olhos abertos:** o usuário olha para a câmera (cabeça neutra). São coletadas amostras de EAR e queda de nariz; a **mediana** do EAR aberto é a baseline.
-2. **Fase 2 — Olhos fechados:** o usuário fecha os olhos e mantém por ~2s. Mediana do EAR fechado é registrada.
-3. **Threshold:** `clamp((openMedian + closedMedian) / 2, 0.12, 0.45)` — ponto médio entre aberto e fechado. Muito mais preciso que a heurística antiga `0.75 × baseline`.
+1. **Intro:** explica o procedimento (rosto de frente, olhos abertos ~2s, fechados ~2s) e oferece "Pular (precisão reduzida)".
+2. **Stale prompt:** se já existe calibração com mais de 6h (`RECALIBRATION_PROMPT_MS`), o wizard pergunta se quer recalibrar ou usar a atual.
+3. **Fase 1 — Olhos abertos:** barra de progresso + contador regressivo + aviso de rosto ausente; o avanço para a fase 2 é **automático** ao atingir 20 amostras.
+4. **Fase 2 — Olhos fechados:** mesma UI; finalização e cálculo do threshold são **automáticos**.
+5. **Resultado:** tela de sucesso com baseline/threshold calculados, ou tela de erro com motivo (timeout, gap, amostras insuficientes) e opção de tentar de novo.
+
+**Detecção fica bloqueada até calibrar:** `detectionEngine.evaluate` só roda quando `calibrationManager.canEvaluate()` é verdadeiro — ou seja, com calibração válida (`safenap_calibration_v3`) OU quando o usuário optou explicitamente por "Pular" (`skipWithDefault`, usa o threshold padrão com precisão reduzida, sinalizado no painel). O coletor de dados ML (`mlDataCollector`) também não coleta frames sem calibração para não contaminar o modelo.
+
+O cálculo do threshold permanece `clamp((openMedian + closedMedian) / 2, 0.12, 0.45)`.
+
+### Driver de calibração (`safety/calibrationManager.ts`)
+Toda a lógica de condução das fases mora no manager (não no React): um driver interno (interval de 200ms) avança de fase ao atingir o mínimo de amostras, finaliza a calibração e aborta com **timeout por fase** (`MAX_CALIBRATION_PHASE_MS = 12s`). O resultado da última tentativa fica exposto em `getOutcome()` (`ok | timeout | gap | insufficient_samples | null`).
 
 ### Proteções e robustez
 - **Settle delay (1.2s):** amostras coletadas nos primeiros 1.2s da calibração são descartadas — dá tempo para auto-exposição/auto-foco da câmera estabilizarem antes da captura.
@@ -81,6 +90,16 @@ O canvas de detecção aplica uma correção leve de brilho/contraste (`brightne
 
 ### Trava de segurança
 O botão "Calibrar" do painel fica **desabilitado** enquanto a câmera está desligada (estado publicado por `cameraStatusStore`).
+
+## Estado compartilhado entre dispositivos (detector/viewer)
+
+O frontend pode ser aberto em vários dispositivos simultaneamente e todos enxergam o **mesmo estado ao vivo** (gauge, gráfico, sessão, alertas, calibração e modelo ML). Arquitetura conforme AGENTS.md:
+
+- **A câmera só roda no device detector.** Frames de vídeo **nunca** passam pelo WebSocket — só métricas derivadas e modelos serializados.
+- O device que clica em "Iniciar Câmera" reivindica o papel de detector (`DETECTOR_CLAIM`). Se a vaga estiver ocupada, vira **viewer** e espelha os dados recebidos (`METRICS_UPDATE` a ~3/s, `SESSION_SYNC` a ~1/s, `CALIBRATION_PROGRESS`, `CALIBRATION_SYNC`, `MODEL_SYNC`).
+- **Bloqueio de detecção:** em qualquer device, `detectionEngine.evaluate` só roda com `calibrationManager.canEvaluate()` — calibração válida OU "Pular (precisão reduzida)". Viewers que não calibraram e não foram sincronizados também não geram alertas.
+- **Calibração compartilhada:** o resultado da calibração bifásica do detector é persistido pelo backend (`backend/safenap_shared.json`) e aplicado em todos os viewers no próximo `STATE_SNAPSHOT`. Viewers podem pedir calibração ao detector (`CALIBRATION_REQUEST`) e acompanham as fases em tempo real via `CALIBRATION_PROGRESS` — inclusive com o wizard guiado em modo remoto.
+- Ao conectar, todo cliente recebe `STATE_SNAPSHOT` com o estado vigente; o backend limpa métricas/sessão ao vivo quando o detector desconecta e libera a vaga para outro dispositivo.
 
 ## Robustez a óculos (`combineEyes`)
 

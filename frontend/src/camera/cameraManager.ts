@@ -163,6 +163,10 @@ export class CameraManager {
     public isCameraActive(): boolean {
         return this.stream !== null && this.stream.active;
     }
+
+    public getStream(): MediaStream | null {
+        return this.stream;
+    }
 }
 
 export const cameraManager = new CameraManager();
