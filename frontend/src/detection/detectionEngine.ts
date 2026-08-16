@@ -295,7 +295,7 @@ export class DetectionEngine {
             wsClient.sendEvent(EventType.FACE_LOST, { lostForMs: lostFor });
         }
 
-        if (this.state !== 'ALARM' && !calibrationManager.isCalibrating) {
+        if (this.state !== 'ALARM' && !calibrationManager.isCalibrating && calibrationManager.canEvaluate()) {
             this.evaluate(now, 0, lostFor);
         }
 

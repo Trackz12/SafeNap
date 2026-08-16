@@ -105,6 +105,31 @@ class SessionStats {
         this.lastSampleAt = 0;
         this.history = [];
     }
+
+    /**
+     * Aplica um snapshot recebido do device detector via sync.
+     * Os contadores são espelhados integralmente; o histórico curto recebido
+     * mantém o gráfico ao vivo do lado viewer.
+     */
+    public applyRemote(snap: SessionSnapshot): void {
+        this.startedAt = snap.active ? Date.now() - snap.durationMs : this.startedAt;
+        this.blinkCount = snap.blinkCount;
+        this.episodeCount = snap.episodeCount;
+        this.warningCount = snap.warningCount;
+        if (snap.avgEar > 0) {
+            this.earSum = snap.avgEar;
+            this.earCount = 1;
+        }
+        if (snap.durationMs > 0) {
+            // Reconstrói a razão de tempo sonolento de forma coerente.
+            this.totalSamples = 1000;
+            this.drowsySamples = Math.round((snap.drowsyTimeMs / snap.durationMs) * 1000);
+        }
+        if (snap.history.length > 0) {
+            this.history = snap.history.slice();
+        }
+        this.lastSampleAt = snap.active ? Date.now() : this.lastSampleAt;
+    }
 }
 
 export const sessionStats = new SessionStats();

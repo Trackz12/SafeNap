@@ -12,7 +12,20 @@ export const EventType = {
     ALARM_ACKNOWLEDGED: "ALARM_ACKNOWLEDGED",
     HEARTBEAT: "HEARTBEAT",
     HARDWARE_STATUS: "HARDWARE_STATUS",
-    ERROR: "ERROR"
+    ERROR: "ERROR",
+    // Sincronização multi-dispositivo (detector -> backend -> viewers)
+    DETECTOR_CLAIM: "DETECTOR_CLAIM",
+    DETECTOR_RELEASE: "DETECTOR_RELEASE",
+    DETECTOR_ASSIGNED: "DETECTOR_ASSIGNED",
+    DETECTOR_TAKEN: "DETECTOR_TAKEN",
+    DETECTOR_CLEARED: "DETECTOR_CLEARED",
+    METRICS_UPDATE: "METRICS_UPDATE",
+    SESSION_SYNC: "SESSION_SYNC",
+    CALIBRATION_SYNC: "CALIBRATION_SYNC",
+    CALIBRATION_PROGRESS: "CALIBRATION_PROGRESS",
+    CALIBRATION_REQUEST: "CALIBRATION_REQUEST",
+    MODEL_SYNC: "MODEL_SYNC",
+    STATE_SNAPSHOT: "STATE_SNAPSHOT"
 } as const;
 
 export type EventType = typeof EventType[keyof typeof EventType];
@@ -49,6 +62,10 @@ class WebSocketClient {
             }
         }
         this.sessionId = Math.random().toString(36).substring(2, 15);
+    }
+
+    public getSessionId(): string {
+        return this.sessionId;
     }
 
     public connect() {

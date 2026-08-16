@@ -7,37 +7,10 @@ import { drowsinessModel } from '../ml/drowsinessModel';
 import { mlDataCollector } from '../ml/mlDataCollector';
 import { Camera, CameraOff, User, EyeClosed, Meh, Frown } from 'lucide-react';
 import { useMetrics } from '../detection/useMetrics';
-
-function EarBar({ ear, threshold }: { ear: number; threshold: number }) {
-    const max = 0.45;
-    const pct = Math.min(100, Math.max(0, (ear / max) * 100));
-    const thresholdPct = Math.min(100, Math.max(0, (threshold / max) * 100));
-    const closed = ear < threshold;
-
-    return (
-        <div style={{ width: '100%', background: 'rgba(0,0,0,0.6)', borderRadius: 6, padding: '4px 8px', marginTop: 4 }}>
-            <div style={{ position: 'relative', height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 4 }}>
-                <div style={{
-                    position: 'absolute', left: 0, top: 0, bottom: 0,
-                    width: `${pct}%`,
-                    background: closed ? 'var(--alarm)' : 'var(--primary)',
-                    borderRadius: 4,
-                    transition: 'width 0.15s linear, background 0.2s',
-                }} />
-                <div style={{
-                    position: 'absolute', top: -2, bottom: -2,
-                    left: `${thresholdPct}%`,
-                    width: 2,
-                    background: 'var(--alarm)',
-                }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#e2e8f0', marginTop: 2 }}>
-                <span>EAR {ear.toFixed(3)}</span>
-                <span>limite {threshold.toFixed(3)}</span>
-            </div>
-        </div>
-    );
-}
+import { EarBar } from './EarBar';
+import { CalibrationWizard } from './CalibrationWizard';
+import { ViewerModeOverlay } from './ViewerModeOverlay';
+import { claimDetectorWithResponse, releaseDetector, onRemoteCalibrationRequested } from '../sync/multiDeviceSync';
 
 export const CameraView: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -46,6 +19,8 @@ export const CameraView: React.FC = () => {
     const [isAiReady, setIsAiReady] = useState(false);
     const [aiError, setAiError] = useState(false);
     const [fps, setFps] = useState(0);
+    const [showWizard, setShowWizard] = useState(false);
+    const [claimNotice, setClaimNotice] = useState<string | null>(null);
     const metrics = useMetrics(200);
 
     useEffect(() => {
@@ -83,15 +58,29 @@ export const CameraView: React.FC = () => {
                 calibrationManager.cancelCalibration();
                 mlDataCollector.stop();
                 setIsActive(false);
+                setShowWizard(false);
+                releaseDetector();
             }
         };
 
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener("pagehide", handleVisibilityChange);
 
+        // Detector: atende pedidos de calibração vindos de viewers.
+        const unsubRemoteCal = onRemoteCalibrationRequested((action) => {
+            if (!cameraManager.isCameraActive()) return;
+            if (action === 'start') {
+                setShowWizard(true);
+                calibrationManager.startCalibration();
+            } else if (action === 'cancel') {
+                calibrationManager.cancelCalibration();
+            }
+        });
+
             return () => {
                 clearTimeout(preloadTimer);
                 cancelAnimationFrame(rafHandle);
+                unsubRemoteCal();
                 document.removeEventListener("visibilitychange", handleVisibilityChange);
                 window.removeEventListener("pagehide", handleVisibilityChange);
                 if (cameraManager.isCameraActive()) {
@@ -114,37 +103,52 @@ export const CameraView: React.FC = () => {
             calibrationManager.cancelCalibration();
             mlDataCollector.stop();
             setIsActive(false);
-        } else {
+            setShowWizard(false);
+            releaseDetector();
+            return;
+        }
+
+        // Negocia o papel de detector antes de abrir a câmera: se outro
+        // device já detém o papel, este device vira viewer (sem câmera).
+        setClaimNotice(null);
+        const role = await claimDetectorWithResponse();
+        if (role === 'viewer') {
+            setClaimNotice('Outro dispositivo já está monitorando. Este virou espectador (viewer).');
+            return;
+        }
+        // role === 'detector' | 'standalone' prosseguem com a câmera.
+
+        try {
+            setIsLoading(true);
+            await cameraManager.startCamera(videoRef.current);
+            setIsActive(true);
+
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
             try {
-                setIsLoading(true);
-                await cameraManager.startCamera(videoRef.current);
-                setIsActive(true);
-
-                await new Promise((resolve) => setTimeout(resolve, 500));
-
-                try {
-                    if (!isAiReady) {
-                        await mediaPipeManager.initialize();
-                        setIsAiReady(true);
-                        setAiError(false);
-                    }
-                    mediaPipeManager.startDetection(videoRef.current);
-                    cameraStatusStore.setActive(true);
-                    calibrationManager.startCalibration();
-                    mlDataCollector.start();
-                    drowsinessModel.initialize().catch(() => { });
-                } catch (aiErr: unknown) {
-                    console.warn("Erro ao iniciar modelo de IA MediaPipe:", aiErr);
-                    setAiError(true);
+                if (!isAiReady) {
+                    await mediaPipeManager.initialize();
+                    setIsAiReady(true);
+                    setAiError(false);
                 }
-            } catch (err: unknown) {
-                console.error("Falha ao iniciar câmera:", err);
-                cameraManager.stopCamera();
-                setIsActive(false);
-                alert((err as Error).message || "Erro ao iniciar a câmera.");
-            } finally {
-                setIsLoading(false);
+                mediaPipeManager.startDetection(videoRef.current);
+                cameraStatusStore.setActive(true);
+                mlDataCollector.start();
+                drowsinessModel.initialize().catch(() => { });
+                setShowWizard(true);
+            } catch (aiErr: unknown) {
+                console.warn("Erro ao iniciar modelo de IA MediaPipe:", aiErr);
+                setAiError(true);
+                setShowWizard(false);
             }
+        } catch (err: unknown) {
+            console.error("Falha ao iniciar câmera:", err);
+            cameraManager.stopCamera();
+            setIsActive(false);
+            releaseDetector();
+            alert((err as Error).message || "Erro ao iniciar a câmera.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -211,11 +215,24 @@ export const CameraView: React.FC = () => {
                         Carregando IA...
                     </div>
                 )}
+
+                <CalibrationWizard visible={showWizard && isActive} onFinish={() => setShowWizard(false)} />
+                <ViewerModeOverlay />
             </div>
 
             {isActive && aiError && !isAiReady && (
                 <div style={{ color: 'var(--warning)', fontSize: '0.85rem', textAlign: 'center' }}>
                     Modelo de IA indisponível — apenas vídeo ativo, sem análise.
+                </div>
+            )}
+
+            {claimNotice && (
+                <div style={{
+                    padding: '0.6rem 0.8rem', borderRadius: 8,
+                    background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.35)',
+                    fontSize: '0.85rem', color: 'var(--warning)', textAlign: 'center',
+                }}>
+                    {claimNotice} — os dados ao vivo continuam visíveis no painel.
                 </div>
             )}
         </div>

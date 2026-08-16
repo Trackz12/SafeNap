@@ -106,6 +106,20 @@ export const userModelStore = {
         return model;
     },
 
+    /**
+     * Aplica um modelo RF treinado recebido de outro device via sync.
+     * Não treina nem reescreve amostras locais; apenas adota o modelo
+     * compartilhado para que o viewer use o mesmo classificador.
+     */
+    applyRemoteModel(remote: UserRF): void {
+        if (!remote || !Array.isArray(remote.trees)) return;
+        if (!model || remote.trainedAt > model.trainedAt) {
+            model = remote;
+            saveModel(model);
+            notify();
+        }
+    },
+
     predict(features: number[]): number | null {
         if (!model) return null;
         return predictUserRF(model, features);

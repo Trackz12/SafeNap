@@ -77,6 +77,10 @@ class MlDataCollector {
             return null;
         }
 
+        // Sem calibração válida (nem optado pelo threshold padrão) o estado
+        // do sistema não é confiável — não coleta para não contaminar o modelo.
+        if (!calibrationManager.canEvaluate()) return null;
+
         const mlResult = drowsinessModel.getLastScore();
         const mlFresh = mlResult.at !== null && (Date.now() - mlResult.at) <= ML_STALE_MS;
 

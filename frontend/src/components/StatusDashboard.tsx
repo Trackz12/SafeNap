@@ -25,9 +25,11 @@ export const StatusDashboard: React.FC = () => {
             setSafety(snapshot);
         });
 
-        wsClient.onStatusChange((status) => {
-            setWsStatus(status);
-        });
+        const handleStatus = (status: unknown) => {
+            setWsStatus(status as ConnectionStatus);
+        };
+        wsClient.on('status', handleStatus);
+        setWsStatus(wsClient.status);
 
         const handleHardwareStatus = (payload: unknown) => {
             const p = payload as { connected?: unknown } | undefined;
@@ -37,12 +39,13 @@ export const StatusDashboard: React.FC = () => {
         };
 
         wsClient.on(EventType.HARDWARE_STATUS, handleHardwareStatus);
+        // A conexão é gerenciada globalmente (main.tsx); aqui apenas garantimos.
         wsClient.connect();
 
         return () => {
             unsub();
+            wsClient.off('status', handleStatus);
             wsClient.off(EventType.HARDWARE_STATUS, handleHardwareStatus);
-            wsClient.disconnect();
         };
     }, []);
 

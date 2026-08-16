@@ -9,6 +9,7 @@ import time
 from app.websocket.manager import ws_manager
 from app.serial.manager import serial_manager
 from app.safety.manager import safety_manager
+from app.core.state_store import state_store
 import json
 
 # Configura log
@@ -77,17 +78,18 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             await ws_manager.handle_message(data, websocket)
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect_async(websocket)
     except Exception as e:
         logger.error(f"Erro no WebSocket: {e}")
-        ws_manager.disconnect(websocket)
+        await ws_manager.disconnect_async(websocket)
 
 @app.get("/api/status")
 def get_status():
     return {
         "serial_connected": serial_manager.connected,
         "active_ws_connections": len(ws_manager.active_connections),
-        "safety_state": safety_manager.current_state
+        "safety_state": safety_manager.current_state,
+        "detector_session": state_store.get_detector(),
     }
 
 CLIENT_ERRORS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "client_errors.log")
