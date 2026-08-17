@@ -39,7 +39,8 @@ export class MediaPipeManager {
         this.offscreenCanvas.height = 240;
         this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
         if (this.offscreenCtx) {
-            this.offscreenCtx.filter = 'brightness(1.06) contrast(1.10)';
+            // Filtro removido — imagens naturais do vídeo são melhores
+            // para o modelo MediaPipe do que ajustes artificiais de brilho/contraste.
         }
     }
 
@@ -83,7 +84,12 @@ export class MediaPipeManager {
                 },
                 outputFaceBlendshapes: false,
                 runningMode: this.runningMode,
-                numFaces: 1
+                numFaces: 1,
+                // Limiares reduzidos para aceitar faces parciais/perfil.
+                // Default (0.5) descarta faces que o modelo não enxerga 100% frontais.
+                minFaceDetectionConfidence: 0.3,
+                minFacePresenceConfidence: 0.3,
+                minTrackingConfidence: 0.5,
             });
             console.log("MediaPipe Inicializado!");
         })().catch((err) => {

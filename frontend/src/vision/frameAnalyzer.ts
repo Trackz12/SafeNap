@@ -1,4 +1,4 @@
-export interface FrameAnalysis {
+﻿export interface FrameAnalysis {
     ear: number;
     earL: number;
     earR: number;
@@ -13,9 +13,7 @@ interface Point {
     z?: number;
 }
 
-// Distância em 3D quando o eixo z está disponível (MediaPipe fornece).
-// O EAR 3D é invariante à pose da cabeça: inclinar a cabeça encolhe a
-// projeção 2D do olho, mas a abertura real em 3D permanece constante.
+// Distancia em 3D quando o eixo z esta disponivel (MediaPipe fornece).
 const dist = (a: Point, b: Point): number =>
     Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + ((a.z ?? 0) - (b.z ?? 0)) ** 2);
 
@@ -25,8 +23,7 @@ interface EyePoints {
     verticals: ReadonlyArray<readonly [number, number]>;
 }
 
-// EAR estendido com 4 pares verticais por olho (em vez de 2): um reflexo de
-// óculos costuma deslocar 1 ou 2 landmarks; amostrar mais pontos dilui o erro.
+// EAR estendido com 4 pares verticais por olho.
 const LEFT_EYE: EyePoints = {
     h1: 33,
     h2: 133,
@@ -57,15 +54,17 @@ const MOUTH_BOTTOM = 14;
 const MOUTH_LEFT = 61;
 const MOUTH_RIGHT = 291;
 
-// Rosto muito pequeno (longe demais) gera landmarks instáveis → descarta.
-const MIN_FACE_WIDTH = 0.15;
-// Rosto cortado pelas bordas → landmarks parciais/ruidosos → descarta.
-const EDGE_MARGIN = 0.03;
+// Reduzido de 0.15 para 0.10 — aceita faces de perfil (geometricamente menores).
+const MIN_FACE_WIDTH = 0.10;
+// Reduzido de 0.03 para 0.01 — em perfil, um lado fica perto da borda.
+const EDGE_MARGIN = 0.01;
 
-// Quando os olhos discordam fortemente (um parece fechado e o outro claramente
-// aberto), o motivo provável é reflexo de óculos/oclusão num olho — sonolência
-// real fecha os DOIS olhos. Nesse caso, confia no olho mais aberto.
 const EYE_DISAGREEMENT_RATIO = 0.55;
+
+// Limiar de yaw acima do qual consideramos perfil significativo.
+const YAW_PROFILE_THRESHOLD = 0.25;
+// Faixa de transicao suave entre yaw 0.25 e 0.60.
+const YAW_TRANSITION_RANGE = 0.35;
 
 function nearEdge(p: Point, margin: number): boolean {
     return p.x < margin || p.x > 1 - margin || p.y < margin || p.y > 1 - margin;
@@ -82,12 +81,30 @@ function eyeEAR(landmarks: Point[], eye: EyePoints): number {
 }
 
 /**
- * Combina o EAR dos dois olhos de forma robusta a óculos/reflexos/oclusão.
- * Exportada para permitir teste unitário isolado.
+ * Combina o EAR dos dois olhos de forma robusta a oculos/reflexos/oclusao
+ * E a poses de perfil (yaw).
+ *
+ * - Em pose frontal: faz a media (com protecao contra discordancia).
+ * - Em pose de perfil: confia no olho mais visivel (do lado da camera),
+ *   pois o olho ocluido da EAR artificialmente baixo.
+ *
+ * A transicao e suave (suavizacao linear) para evitar oscilacoes.
  */
-export function combineEyes(earL: number, earR: number): number {
+export function combineEyes(earL: number, earR: number, yawRatio: number = 0): number {
     const lo = Math.min(earL, earR);
     const hi = Math.max(earL, earR);
+
+    const absYaw = Math.abs(yawRatio);
+
+    // Em perfil significativo: confiar no olho mais aberto (mais visivel)
+    if (absYaw > YAW_PROFILE_THRESHOLD) {
+        const yawFactor = Math.min(1, (absYaw - YAW_PROFILE_THRESHOLD) / YAW_TRANSITION_RANGE);
+        const frontEar = (earL + earR) / 2;
+        const profileEar = hi;
+        return frontEar * (1 - yawFactor) + profileEar * yawFactor;
+    }
+
+    // Pose frontal: protecao contra discordancia (reflexo/oclusao)
     if (hi > 1e-6 && lo / hi < EYE_DISAGREEMENT_RATIO) return hi;
     return (earL + earR) / 2;
 }
@@ -98,21 +115,34 @@ export function analyzeFrame(landmarks: Point[]): FrameAnalysis | null {
     const faceWidth = dist(landmarks[EYE_OUTER_LEFT], landmarks[EYE_OUTER_RIGHT]);
     if (faceWidth < MIN_FACE_WIDTH) return null;
 
-    // Verifica se pontos-chave estão dentro do frame (rosto não cortado)
+    // Em perfil, apenas nariz e queixo sao confiaveis (centro do rosto).
     if (
-        nearEdge(landmarks[EYE_OUTER_LEFT], EDGE_MARGIN) ||
-        nearEdge(landmarks[EYE_OUTER_RIGHT], EDGE_MARGIN) ||
-        nearEdge(landmarks[CHIN], EDGE_MARGIN) ||
         nearEdge(landmarks[NOSE_TIP], EDGE_MARGIN) ||
-        nearEdge(landmarks[MOUTH_LEFT], EDGE_MARGIN) ||
-        nearEdge(landmarks[MOUTH_RIGHT], EDGE_MARGIN)
+        nearEdge(landmarks[CHIN], EDGE_MARGIN)
     ) {
         return null;
     }
 
+    // Em perfil, os olhos podem estar parcialmente fora do frame —
+    // so verificamos borda se o yaw for baixo (pose mais frontal).
+    const midEyesX = (landmarks[EYE_OUTER_LEFT].x + landmarks[EYE_OUTER_RIGHT].x) / 2;
+    const yawEstimate = faceWidth > 1e-6
+        ? Math.abs(landmarks[NOSE_TIP].x - midEyesX) / faceWidth
+        : 0;
+
+    if (yawEstimate < 0.3) {
+        if (
+            nearEdge(landmarks[EYE_OUTER_LEFT], EDGE_MARGIN) ||
+            nearEdge(landmarks[EYE_OUTER_RIGHT], EDGE_MARGIN) ||
+            nearEdge(landmarks[MOUTH_LEFT], EDGE_MARGIN) ||
+            nearEdge(landmarks[MOUTH_RIGHT], EDGE_MARGIN)
+        ) {
+            return null;
+        }
+    }
+
     const earL = eyeEAR(landmarks, LEFT_EYE);
     const earR = eyeEAR(landmarks, RIGHT_EYE);
-    const ear = combineEyes(earL, earR);
 
     const midEyes = {
         x: (landmarks[EYE_OUTER_LEFT].x + landmarks[EYE_OUTER_RIGHT].x) / 2,
@@ -122,6 +152,9 @@ export function analyzeFrame(landmarks: Point[]): FrameAnalysis | null {
 
     const noseDropRatio = faceHeight > 1e-6 ? (landmarks[NOSE_TIP].y - midEyes.y) / faceHeight : 0;
     const yawRatio = faceWidth > 1e-6 ? (landmarks[NOSE_TIP].x - midEyes.x) / faceWidth : 0;
+
+    // EAR compensado por yaw — em perfil, confia no olho mais visivel
+    const ear = combineEyes(earL, earR, yawRatio);
 
     const mouthWidth = dist(landmarks[MOUTH_LEFT], landmarks[MOUTH_RIGHT]);
     const mouthAspect = mouthWidth > 1e-6
