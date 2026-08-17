@@ -19,3 +19,4 @@ backend/build/
 backend/dist/
 backend/*.spec
 backend/safenap_shared.json
+.vercel/
