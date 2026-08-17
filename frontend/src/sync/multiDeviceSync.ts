@@ -121,9 +121,13 @@ function startPublishing(): void {
  * Requisita o papel de detector e aguarda a resposta do backend.
  *  - 'detector': claim aceito (este device monitora)
  *  - 'viewer': outro device já é detector
- *  - 'standalone': WebSocket indisponível — opera localmente sozinho
+ *  - 'standalone': backend inacessível após timeout — opera localmente sozinho
+ *
+ * Se o WebSocket estiver desconectado, a função tenta conectá-lo antes de
+ * reivindicar — evitando race conditions onde dois devices viram detectores
+ * independentes ao abrirem a câmera antes da conexão ficar pronta.
  */
-export function claimDetectorWithResponse(timeoutMs = 3000): Promise<'detector' | 'viewer' | 'standalone'> {
+export function claimDetectorWithResponse(timeoutMs = 5000): Promise<'detector' | 'viewer' | 'standalone'> {
     return new Promise((resolve) => {
         let done = false;
         let timer: ReturnType<typeof setTimeout> | null = null;
@@ -149,22 +153,23 @@ export function claimDetectorWithResponse(timeoutMs = 3000): Promise<'detector' 
 
         if (wsClient.status === 'CONNECTED') {
             wsClient.sendEvent(EventType.DETECTOR_CLAIM, {});
-        } else if (wsClient.status === 'DISCONNECTED' || wsClient.status === 'ERROR') {
-            // WebSocket nunca se conectou (backend fora/sem rede): opera local.
+        } else if (wsClient.status === 'ERROR') {
             finish('standalone');
         } else {
-            // CONNECTING/RECONNECTING: espera abrir e então reivindica.
+            // DISCONNECTED / CONNECTING / RECONNECTING: espera a conexão
+            // abrir e então reivindica. Se falhar, cai em standalone via timeout.
             const handler = (status: unknown) => {
                 if (status === 'CONNECTED') {
                     wsClient.off('status', handler);
                     wsClient.sendEvent(EventType.DETECTOR_CLAIM, {});
-                } else if (status === 'ERROR' || status === 'DISCONNECTED') {
+                } else if (status === 'ERROR') {
                     wsClient.off('status', handler);
                     finish('standalone');
                 }
             };
             unsubStatus = () => wsClient.off('status', handler);
             wsClient.on('status', handler);
+            if (wsClient.status === 'DISCONNECTED') wsClient.connect();
         }
     });
 }

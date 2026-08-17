@@ -93,13 +93,32 @@ describe('multiDeviceSync - negociação de papel', () => {
         send2.mockRestore();
     });
 
-    it('claimDetectorWithResponse resolve standalone sem WebSocket conectado', async () => {
+    it('claimDetectorWithResponse resolve standalone quando backend retornou erro de conexão', async () => {
         roleStore.setRole('none');
         roleStore.setDetectorOwner(null);
-        wsClient.status = 'DISCONNECTED';
+        wsClient.status = 'ERROR';
         const result = await claimDetectorWithResponse(150);
         expect(result).toBe('standalone');
         wsClient.status = 'CONNECTED';
+    });
+
+    it('claimDetectorWithResponse aguarda conexão quando DISCONNECTED e resolve detector', async () => {
+        roleStore.setRole('none');
+        roleStore.setDetectorOwner(null);
+        wsClient.status = 'DISCONNECTED';
+        const send = vi.spyOn(wsClient, 'sendEvent').mockImplementation(() => {
+            recv(EventType.DETECTOR_ASSIGNED, { owner: wsClient.getSessionId() });
+        });
+        const connectSpy = vi.spyOn(wsClient, 'connect').mockImplementation(() => {
+            wsClient.status = 'CONNECTED';
+            (wsClient as unknown as { triggerListener: (e: string, d: unknown) => void })
+                .triggerListener('status', 'CONNECTED');
+        });
+        const result = await claimDetectorWithResponse(2000);
+        expect(result).toBe('detector');
+        expect(connectSpy).toHaveBeenCalled();
+        send.mockRestore();
+        connectSpy.mockRestore();
     });
 
     it('releaseDetector limpa papel', () => {
