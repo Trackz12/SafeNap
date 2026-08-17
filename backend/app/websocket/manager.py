@@ -147,7 +147,15 @@ class ConnectionManager:
 
             # --- Eventos de sincronização: persistir e reencaminhar ---
             if msg.type in SYNC_EVENTS:
-                state_store.update(STORE_KEY[msg.type], msg.payload)
+                # Extrair payload interno: o frontend envia { metrics: m },
+                # { session: s }, { model: m } etc. — precisamos gravar
+                # apenas o valor, não o wrapper, para que o STATE_SNAPSHOT
+                # entregue o dado plano ao viewer.
+                raw = msg.payload
+                inner = raw
+                if isinstance(raw, dict) and len(raw) == 1:
+                    inner = next(iter(raw.values()))
+                state_store.update(STORE_KEY[msg.type], inner)
                 await self.broadcast(text_data, exclude=websocket)
                 return
 

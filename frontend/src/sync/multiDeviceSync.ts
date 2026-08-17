@@ -203,17 +203,24 @@ export function onRemoteCalibrationRequested(cb: RemoteCalibrationCallback | nul
 
 // ---------- aplicação (viewer) ----------
 
+/** Extrai o dado real, tolerando wrapper ({ metrics: m }) ou valor direto (m). */
+function unwrap<T>(payload: any, key: string): T | undefined {
+    if (payload == null) return undefined;
+    if (payload[key] !== undefined) return payload[key] as T;
+    return payload as T;
+}
+
 function applyRemoteMetrics(payload: any): void {
-    const metrics = payload?.metrics;
+    const metrics = unwrap<{ [k: string]: unknown }>(payload, 'metrics');
     if (metrics) {
         metricsStore.publish({ ...DEFAULT_METRICS, ...metrics });
     }
 }
 
 function applyRemoteSession(payload: any): void {
-    const session = payload?.session;
+    const session = unwrap<SessionSnapshot>(payload, 'session');
     if (session) {
-        sessionStats.applyRemote(session as SessionSnapshot);
+        sessionStats.applyRemote(session);
     }
 }
 
@@ -228,16 +235,13 @@ function applyRemoteCalibrationProgress(payload: any): void {
 }
 
 function applyRemoteCalibrationResult(payload: any): void {
-    const cal = payload?.calibration;
+    const cal = unwrap<any>(payload, 'calibration');
     if (!cal) return;
     calibrationManager.applyRemoteCalibration(cal);
-    // Não limpa o outcome aqui: o viewer em progresso ainda precisa exibir a
-    // tela de sucesso. O outcome zera quando a próxima calibração iniciar
-    // (o detector reseta lastOutcome em startCalibration).
 }
 
 function applyRemoteModel(payload: any): void {
-    const model = payload?.model;
+    const model = unwrap<any>(payload, 'model');
     if (model) {
         userModelStore.applyRemoteModel(model);
     }
@@ -249,9 +253,6 @@ function applySnapshot(payload: any): void {
         roleStore.setRole('viewer');
         roleStore.setDetectorOwner(payload.detector ?? null);
     }
-    // Os valores persistidos pelo backend são os payloads originais dos eventos
-    // (ex: payload de METRICS_UPDATE = { metrics: {...} }), então basta
-    // reaplicá-los diretamente nos handlers existentes.
     if (payload.metrics) applyRemoteMetrics(payload.metrics);
     if (payload.session) applyRemoteSession(payload.session);
     if (payload.calibration) applyRemoteCalibrationResult(payload.calibration);
