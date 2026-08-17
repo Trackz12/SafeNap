@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { calibrationManager, MIN_CALIBRATION_SAMPLES } from '../safety/calibrationManager';
 import { detectionEngine, type PresetName } from '../detection/detectionEngine';
 import { cameraStatusStore } from '../camera/cameraStatusStore';
-import { SlidersHorizontal, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { SlidersHorizontal, Trash2, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 
-const phaseInstruction: Record<string, string> = {
+const PHASE_INSTRUCTION: Record<string, string> = {
     idle: '',
     open: 'Olhe para a câmera com os OLHOS ABERTOS e cabeça neutra.',
     closed: 'Agora FECHE os olhos e mantenha até a barra completar.',
@@ -33,17 +33,12 @@ export const CalibrationPanel: React.FC = () => {
             setCalibratedAt(calibrationManager.getCalibratedAt());
             setOpenCount(calibrationManager.getOpenSampleCount());
             setClosedCount(calibrationManager.getClosedSampleCount());
-
-            // Mensagem de erro do último resultado (o wizard já exibe; aqui
-            // é só um lembrete caso o usuário acompanhe pelo painel lateral).
             const outcome = calibrationManager.getOutcome();
             if (!calibrationManager.isCalibrating && outcome && outcome !== 'ok') {
                 setErrorMsg('A última calibração não foi concluída. Abra a câmera para calibrar.');
             }
         });
-        const unsubCam = cameraStatusStore.subscribe(() => {
-            setCameraOn(cameraStatusStore.isActive());
-        });
+        const unsubCam = cameraStatusStore.subscribe(() => setCameraOn(cameraStatusStore.isActive()));
         return () => { unsubCal(); unsubCam(); };
     }, []);
 
@@ -56,136 +51,123 @@ export const CalibrationPanel: React.FC = () => {
         calibrationManager.startCalibration();
     };
 
-    const clearCalibration = () => {
-        calibrationManager.clearCalibration();
-        setErrorMsg(null);
-    };
-
-    const changePreset = (name: PresetName) => {
-        setPreset(name);
-        detectionEngine.setPreset(name);
-    };
+    const PRESETS: Array<[PresetName, string]> = [
+        ['lenient', 'Leve'],
+        ['standard', 'Padrão'],
+        ['strict', 'Alta'],
+    ];
 
     return (
-        <div className="glass-panel" style={{ marginBottom: '1rem' }}>
-            <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <SlidersHorizontal size={18} color="var(--primary)" /> Calibração & Sensibilidade
-            </h3>
+        <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+            <div className="glass-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <SlidersHorizontal size={14} color="var(--primary)" />
+                    <span className="glass-panel-title">Calibração</span>
+                </div>
+            </div>
+
+            {/* Description — only when not calibrating */}
             {!isCalibrating && (
-                <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                    A calibração guiada abre automaticamente ao ligar a câmera. Você também pode
-                    recalibrar pelo botão abaixo (apenas com a câmera ligada).
+                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 var(--space-3) 0', lineHeight: 1.5 }}>
+                    A calibração guiada abre ao ligar a câmera. Você pode recalibrar pelo botão abaixo.
                 </p>
             )}
 
+            {/* Active calibration */}
             {isCalibrating && (
-                <div style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
-                    <div style={{ marginBottom: '0.5rem', color: 'var(--primary)' }}>
-                        {phaseInstruction[phase]}
+                <div style={{ marginBottom: 'var(--space-3)' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--primary)', marginBottom: 'var(--space-2)' }}>
+                        {PHASE_INSTRUCTION[phase]}
                     </div>
-                    <div style={{ height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
                         <div style={{
                             width: `${progressPct}%`,
                             height: '100%',
                             background: 'var(--primary)',
                             transition: 'width 0.2s linear',
-                            borderRadius: 4,
                         }} />
                     </div>
-                    <div style={{ marginTop: '0.3rem', color: 'var(--text-muted)' }}>
-                        {phaseCount} / {MIN_CALIBRATION_SAMPLES} amostras — fase {phase === 'open' ? '1 (olhos abertos)' : '2 (olhos fechados)'}
+                    <div style={{ marginTop: 'var(--space-1)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                        {phaseCount} / {MIN_CALIBRATION_SAMPLES} — fase {phase === 'open' ? '1 (olhos abertos)' : '2 (olhos fechados)'}
                     </div>
                 </div>
             )}
 
+            {/* Error */}
             {errorMsg && (
-                <div style={{
-                    marginBottom: '1rem', padding: '0.6rem 0.8rem', borderRadius: 8,
-                    background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.4)',
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem',
-                }}>
-                    <AlertTriangle size={16} color="var(--alarm)" /> {errorMsg}
+                <div className="badge badge-red" style={{ padding: 'var(--space-2) var(--space-3)', marginBottom: 'var(--space-3)', width: '100%', justifyContent: 'flex-start' }}>
+                    <AlertTriangle size={14} />
+                    {errorMsg}
                 </div>
             )}
 
+            {/* Calibrated status */}
             {!isCalibrating && calibratedAt && (
-                <div style={{
-                    marginBottom: '1rem', padding: '0.5rem 0.8rem', borderRadius: 8,
-                    background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)',
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', flexWrap: 'wrap',
-                }}>
-                    <CheckCircle2 size={16} color="var(--primary)" />
-                    <span>Calibrado em <strong>{calDate}</strong></span>
+                <div className="badge badge-green" style={{ padding: 'var(--space-2) var(--space-3)', marginBottom: 'var(--space-3)', width: '100%', justifyContent: 'flex-start' }}>
+                    <CheckCircle2 size={14} />
+                    <span>Calibrado em {calDate}</span>
                     {calibrationManager.isStale() && (
-                        <span style={{ color: 'var(--warning)' }}>— recalibração sugerida</span>
+                        <span style={{ color: 'var(--warning)' }}> — recalibração sugerida</span>
                     )}
-                    <button
-                        className="btn btn-secondary"
-                        onClick={clearCalibration}
-                        style={{ marginLeft: 'auto', padding: '0.25rem 0.6rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                    >
-                        <Trash2 size={14} /> Limpar
-                    </button>
-                </div>
-            )}
-
-            {!isCalibrating && !calibratedAt && calibrationManager.isSkipped() && (
-                <div style={{
-                    marginBottom: '1rem', padding: '0.5rem 0.8rem', borderRadius: 8,
-                    background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.35)',
-                    display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem',
-                }}>
-                    <AlertTriangle size={16} color="var(--warning)" />
-                    Monitorando sem calibração (precisão reduzida). Ligue a câmera para calibrar.
-                </div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <button
                         className="btn"
-                        onClick={startCalibration}
-                        disabled={isCalibrating || !cameraOn}
-                        style={{
-                            backgroundColor: isCalibrating || !cameraOn ? '#666' : '#4CAF50',
-                            cursor: isCalibrating || !cameraOn ? 'not-allowed' : 'pointer'
-                        }}
+                        onClick={() => { calibrationManager.clearCalibration(); setErrorMsg(null); }}
+                        style={{ marginLeft: 'auto', padding: '2px 6px', fontSize: 'var(--text-xs)' }}
                     >
-                        {isCalibrating
-                            ? `Calibrando... fase ${phase === 'open' ? '1' : '2'}`
-                            : 'Calibrar'}
+                        <Trash2 size={12} />
                     </button>
-                    {!cameraOn && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Ligue a câmera para calibrar
-                        </span>
-                    )}
                 </div>
+            )}
 
-                <div style={{ fontSize: '0.9rem' }}>
-                    <div>Baseline (aberto): <strong>{baseline ? baseline.toFixed(3) : 'N/A'}</strong></div>
+            {/* Skipped warning */}
+            {!isCalibrating && !calibratedAt && calibrationManager.isSkipped() && (
+                <div className="badge badge-yellow" style={{ padding: 'var(--space-2) var(--space-3)', marginBottom: 'var(--space-3)', width: '100%', justifyContent: 'flex-start' }}>
+                    <AlertTriangle size={14} />
+                    Sem calibração (precisão reduzida)
+                </div>
+            )}
+
+            {/* Action + baselines */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
+                <button
+                    className="btn btn-primary"
+                    onClick={startCalibration}
+                    disabled={isCalibrating || !cameraOn}
+                    style={{ fontSize: 'var(--text-xs)' }}
+                >
+                    {isCalibrating
+                        ? <><Loader2 size={14} className="spin" /> Calibrando…</>
+                        : 'Calibrar'
+                    }
+                </button>
+
+                {!cameraOn && (
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)' }}>
+                        Ligue a câmera
+                    </span>
+                )}
+
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', marginLeft: 'auto' }}>
+                    <span>aberto: <strong>{baseline ? baseline.toFixed(3) : '—'}</strong></span>
                     {closedBaseline !== null && (
-                        <div>Baseline (fechado): <strong>{closedBaseline.toFixed(3)}</strong></div>
+                        <span> · fechado: <strong>{closedBaseline.toFixed(3)}</strong></span>
                     )}
-                    <div>Limite de fechamento: <strong>{threshold.toFixed(3)}</strong></div>
+                    <span> · limite: <strong>{threshold.toFixed(3)}</strong></span>
                 </div>
             </div>
 
+            {/* Sensitivity presets */}
             <div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Sensibilidade da detecção
+                <div className="metric-label" style={{ marginBottom: 'var(--space-2)' }}>
+                    Sensibilidade
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    {([
-                        ['lenient', 'Leve'],
-                        ['standard', 'Padrão'],
-                        ['strict', 'Alta'],
-                    ] as Array<[PresetName, string]>).map(([name, label]) => (
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {PRESETS.map(([name, label]) => (
                         <button
                             key={name}
-                            className={`btn ${preset === name ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => changePreset(name)}
-                            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                            className={`btn ${preset === name ? 'btn-primary' : ''}`}
+                            onClick={() => { setPreset(name); detectionEngine.setPreset(name); }}
+                            style={{ flex: 1, fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}
                         >
                             {label}
                         </button>

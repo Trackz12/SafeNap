@@ -74,6 +74,7 @@ class DrowsinessModel {
                 // Warmup com tensor dummy
                 const dummy = new ort.Tensor('float32', new Float32Array(18), [1, 18]);
                 await this.session!.run({ features: dummy });
+                try { dummy.dispose(); } catch { /* ok */ }
 
                 modelStatusStore.setStatus('ready');
                 console.log('Modelo de sonolência ONNX carregado!');
@@ -118,21 +119,28 @@ class DrowsinessModel {
 
         void loadORT().then((ort) => {
             const input = new ort.Tensor('float32', tensor, [1, 18]);
-            return this.session!.run({ features: input });
-        }).then((results) => {
-            const output = results['probabilities'];
-            if (output && output.data.length >= 2) {
-                const probDrowsy = (output.data as Float32Array)[1];
-                this.scoreBuffer.push(probDrowsy);
-                if (this.scoreBuffer.length > SMOOTHING_WINDOW) this.scoreBuffer.shift();
-                const sorted = [...this.scoreBuffer].sort((a, b) => a - b);
-                const mid = Math.floor(sorted.length / 2);
-                const smoothed = sorted.length % 2
-                    ? sorted[mid]
-                    : (sorted[mid - 1] + sorted[mid]) / 2;
-                this.lastResult = { score: smoothed, at: Date.now() };
-            }
-            this.busy = false;
+            return this.session!.run({ features: input }).then((results) => {
+                // Libera o tensor de input imediatamente após o run
+                try { input.dispose(); } catch { /* ok */ }
+
+                const output = results['probabilities'];
+                if (output && output.data.length >= 2) {
+                    const probDrowsy = (output.data as Float32Array)[1];
+                    this.scoreBuffer.push(probDrowsy);
+                    if (this.scoreBuffer.length > SMOOTHING_WINDOW) this.scoreBuffer.shift();
+                    const sorted = [...this.scoreBuffer].sort((a, b) => a - b);
+                    const mid = Math.floor(sorted.length / 2);
+                    const smoothed = sorted.length % 2
+                        ? sorted[mid]
+                        : (sorted[mid - 1] + sorted[mid]) / 2;
+                    this.lastResult = { score: smoothed, at: Date.now() };
+                }
+
+                // Libera o tensor de output
+                try { output?.dispose?.(); } catch { /* ok */ }
+
+                this.busy = false;
+            });
         }).catch(() => {
             this.busy = false;
         });

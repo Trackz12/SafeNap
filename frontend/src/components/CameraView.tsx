@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { cameraManager } from '../camera/cameraManager';
 import { mediaPipeManager } from '../vision/mediapipe';
 import { cameraStatusStore } from '../camera/cameraStatusStore';
@@ -23,32 +23,31 @@ export const CameraView: React.FC = () => {
     const [claimNotice, setClaimNotice] = useState<string | null>(null);
     const metrics = useMetrics(200);
 
+    /** Ref para rastrear se o componente está montado (guard contra race conditions). */
+    const mountedRef = useRef(true);
+    /** Ref para rastrear se uma operação de toggle está em progresso. */
+    const togglingRef = useRef(false);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    // Pré-carregamento da IA (uma única vez)
     useEffect(() => {
         const preloadAI = async () => {
             try {
                 await mediaPipeManager.initialize();
-                setIsAiReady(true);
-                setAiError(false);
+                if (mountedRef.current) {
+                    setIsAiReady(true);
+                    setAiError(false);
+                }
             } catch (e) {
                 console.error("Erro ao pré-carregar IA:", e);
-                setAiError(true);
+                if (mountedRef.current) setAiError(true);
             }
         };
         const preloadTimer = setTimeout(preloadAI, 1000);
-
-        let frameCount = 0;
-        let lastCount = performance.now();
-        let rafHandle: number;
-        const countLoop = (t: number) => {
-            frameCount++;
-            if (t - lastCount >= 1000) {
-                setFps(Math.round((frameCount * 1000) / (t - lastCount)));
-                frameCount = 0;
-                lastCount = t;
-            }
-            rafHandle = requestAnimationFrame(countLoop);
-        };
-        rafHandle = requestAnimationFrame(countLoop);
 
         const handleVisibilityChange = () => {
             if (document.hidden && cameraManager.isCameraActive()) {
@@ -66,7 +65,6 @@ export const CameraView: React.FC = () => {
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener("pagehide", handleVisibilityChange);
 
-        // Detector: atende pedidos de calibração vindos de viewers.
         const unsubRemoteCal = onRemoteCalibrationRequested((action) => {
             if (!cameraManager.isCameraActive()) return;
             if (action === 'start') {
@@ -77,59 +75,96 @@ export const CameraView: React.FC = () => {
             }
         });
 
-            return () => {
-                clearTimeout(preloadTimer);
-                cancelAnimationFrame(rafHandle);
-                unsubRemoteCal();
-                document.removeEventListener("visibilitychange", handleVisibilityChange);
-                window.removeEventListener("pagehide", handleVisibilityChange);
-                if (cameraManager.isCameraActive()) {
-                    cameraManager.stopCamera();
-                    mediaPipeManager.stopDetection();
-                }
-                cameraStatusStore.setActive(false);
-                calibrationManager.cancelCalibration();
-                mlDataCollector.stop();
-            };
-    }, []);
-
-    const toggleCamera = async () => {
-        if (!videoRef.current) return;
-
-        if (isActive) {
-            cameraManager.stopCamera();
-            mediaPipeManager.stopDetection();
+        return () => {
+            mountedRef.current = false;
+            clearTimeout(preloadTimer);
+            unsubRemoteCal();
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("pagehide", handleVisibilityChange);
+            if (cameraManager.isCameraActive()) {
+                cameraManager.stopCamera();
+                mediaPipeManager.stopDetection();
+            }
             cameraStatusStore.setActive(false);
             calibrationManager.cancelCalibration();
             mlDataCollector.stop();
-            setIsActive(false);
-            setShowWizard(false);
-            releaseDetector();
+            // Libera o modelo MediaPipe (memória WASM) no unmount
+            mediaPipeManager.releaseModel();
+        };
+    }, []);
+
+    // FPS counter — só roda quando a câmera está ativa
+    useEffect(() => {
+        if (!isActive) {
+            setFps(0);
             return;
         }
 
-        // Negocia o papel de detector antes de abrir a câmera: se outro
-        // device já detém o papel, este device vira viewer (sem câmera).
-        setClaimNotice(null);
-        const role = await claimDetectorWithResponse();
-        if (role === 'viewer') {
-            setClaimNotice('Outro dispositivo já está monitorando. Este virou espectador (viewer).');
-            return;
-        }
-        // role === 'detector' | 'standalone' prosseguem com a câmera.
+        let frameCount = 0;
+        let lastCount = performance.now();
+        let rafHandle: number;
+        const countLoop = (t: number) => {
+            frameCount++;
+            if (t - lastCount >= 1000) {
+                setFps(Math.round((frameCount * 1000) / (t - lastCount)));
+                frameCount = 0;
+                lastCount = t;
+            }
+            rafHandle = requestAnimationFrame(countLoop);
+        };
+        rafHandle = requestAnimationFrame(countLoop);
+        return () => cancelAnimationFrame(rafHandle);
+    }, [isActive]);
+
+    const toggleCamera = useCallback(async () => {
+        if (!videoRef.current) return;
+
+        // Guard contra duplo-clique / race condition
+        if (togglingRef.current) return;
+        togglingRef.current = true;
 
         try {
+            if (isActive) {
+                cameraManager.stopCamera();
+                mediaPipeManager.stopDetection();
+                cameraStatusStore.setActive(false);
+                calibrationManager.cancelCalibration();
+                mlDataCollector.stop();
+                setIsActive(false);
+                setShowWizard(false);
+                releaseDetector();
+                return;
+            }
+
+            setClaimNotice(null);
+            const role = await claimDetectorWithResponse();
+            if (!mountedRef.current) return;
+            if (role === 'viewer') {
+                setClaimNotice('Outro dispositivo já está monitorando. Este virou espectador.');
+                return;
+            }
+
             setIsLoading(true);
             await cameraManager.startCamera(videoRef.current);
+            if (!mountedRef.current) {
+                cameraManager.stopCamera();
+                return;
+            }
             setIsActive(true);
 
             await new Promise((resolve) => setTimeout(resolve, 500));
+            if (!mountedRef.current) {
+                cameraManager.stopCamera();
+                return;
+            }
 
             try {
                 if (!isAiReady) {
                     await mediaPipeManager.initialize();
-                    setIsAiReady(true);
-                    setAiError(false);
+                    if (mountedRef.current) {
+                        setIsAiReady(true);
+                        setAiError(false);
+                    }
                 }
                 mediaPipeManager.startDetection(videoRef.current);
                 cameraStatusStore.setActive(true);
@@ -138,81 +173,112 @@ export const CameraView: React.FC = () => {
                 setShowWizard(true);
             } catch (aiErr: unknown) {
                 console.warn("Erro ao iniciar modelo de IA MediaPipe:", aiErr);
-                setAiError(true);
-                setShowWizard(false);
+                if (mountedRef.current) {
+                    setAiError(true);
+                    setShowWizard(false);
+                }
             }
         } catch (err: unknown) {
             console.error("Falha ao iniciar câmera:", err);
             cameraManager.stopCamera();
-            setIsActive(false);
+            if (mountedRef.current) setIsActive(false);
             releaseDetector();
             alert((err as Error).message || "Erro ao iniciar a câmera.");
         } finally {
-            setIsLoading(false);
+            if (mountedRef.current) setIsLoading(false);
+            togglingRef.current = false;
         }
-    };
+    }, [isActive, isAiReady]);
 
     const startDisabled = isLoading || (!isAiReady && !aiError && !isActive);
 
-    const eyeStatusIcon = metrics.eyesClosed
-        ? <EyeClosed size={16} color="var(--alarm)" />
-        : <User size={16} color={metrics.facePresent ? 'var(--primary)' : 'var(--text-muted)'} />;
+    /* Status badge */
+    const statusColor = isActive
+        ? (metrics.eyesClosed ? 'var(--alarm)' : 'var(--primary)')
+        : 'var(--text-faint)';
+    const statusLabel = isActive
+        ? (metrics.facePresent
+            ? (metrics.eyesClosed ? 'Olhos fechados' : 'Monitorando')
+            : 'Sem rosto')
+        : 'Inativo';
+    const statusBadge = isActive
+        ? (metrics.eyesClosed ? 'badge-red' : 'badge-green')
+        : 'badge-muted';
 
     return (
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', backdropFilter: 'none', WebkitBackdropFilter: 'none' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Camera size={20} color="var(--primary)" /> Monitoramento
-                </h2>
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 0, overflow: 'hidden' }}>
+            {/* Header bar */}
+            <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: 'var(--space-3) var(--space-4)',
+                borderBottom: '1px solid var(--border-subtle)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <Camera size={16} color="var(--primary)" />
+                    <span className="glass-panel-title">Monitoramento</span>
+                </div>
                 <button
                     className={`btn ${isActive ? 'btn-danger' : 'btn-primary'}`}
                     onClick={toggleCamera}
                     disabled={startDisabled}
-                    style={{ opacity: startDisabled ? 0.7 : 1 }}
+                    style={{ fontSize: 'var(--text-xs)' }}
                 >
-                    {isLoading ? 'Iniciando...' : isActive ? <><CameraOff size={18} /> Parar Câmera</> : aiError && !isAiReady ? 'Tentar novamente' : isAiReady ? <><Camera size={18} /> Iniciar Câmera</> : 'Carregando IA...'}
+                    {isLoading
+                        ? 'Iniciando…'
+                        : isActive
+                            ? <><CameraOff size={14} /> Parar</>
+                            : aiError && !isAiReady
+                                ? 'Tentar novamente'
+                                : isAiReady
+                                    ? <><Camera size={14} /> Iniciar</>
+                                    : 'Carregando IA…'
+                    }
                 </button>
             </div>
 
-            <div className="camera-wrapper">
+            {/* Video area */}
+            <div className="camera-wrapper" style={{ borderRadius: 0 }}>
                 <video ref={videoRef} className="camera-video" playsInline autoPlay muted />
 
+                {/* Bottom gradient + EAR bar */}
                 {isActive && (
                     <div style={{
                         position: 'absolute', bottom: 0, left: 0, right: 0,
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
-                        padding: '2rem 1rem 0.75rem 1rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.5rem',
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
+                        padding: 'var(--space-8) var(--space-3) var(--space-3) var(--space-3)',
                     }}>
                         <EarBar ear={metrics.ear} threshold={metrics.threshold} />
                     </div>
                 )}
 
+                {/* Top overlay badges */}
                 <div className="camera-overlay">
-                    <div className="badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div className="status-indicator" style={{ background: isActive ? (metrics.eyesClosed ? 'var(--alarm)' : 'var(--primary)') : 'var(--alarm)' }} />
-                        {isActive ? (metrics.facePresent ? (metrics.eyesClosed ? 'Olhos fechados' : 'Monitorando') : 'Sem rosto') : 'Inativo'}
-                    </div>
+                    <span className={`badge ${statusBadge}`}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
+                        {statusLabel}
+                    </span>
                     {isActive && (
-                        <div className="badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            {eyeStatusIcon}
-                            {metrics.yawnActive && <Meh size={14} color="var(--warning)" />}
-                            {metrics.headDropped && <Frown size={14} color="var(--warning)" />}
-                            <span>{fps} FPS</span>
-                        </div>
+                        <span className="badge badge-muted">
+                            {metrics.eyesClosed
+                                ? <EyeClosed size={12} color="var(--alarm)" />
+                                : <User size={12} color="var(--primary)" />
+                            }
+                            {metrics.yawnActive && <Meh size={12} color="var(--warning)" />}
+                            {metrics.headDropped && <Frown size={12} color="var(--warning)" />}
+                            {fps} FPS
+                        </span>
                     )}
                 </div>
 
+                {/* Empty / loading states */}
                 {!isActive && !isLoading && (
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--text-muted)' }}>
-                        Câmera não iniciada
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-faint)' }}>Câmera inativa</span>
                     </div>
                 )}
                 {isLoading && (
-                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--primary)', fontWeight: 'bold' }}>
-                        Carregando IA...
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--primary)', fontWeight: 600 }}>Carregando IA…</span>
                     </div>
                 )}
 
@@ -220,19 +286,16 @@ export const CameraView: React.FC = () => {
                 <ViewerModeOverlay />
             </div>
 
+            {/* Warnings below video */}
             {isActive && aiError && !isAiReady && (
-                <div style={{ color: 'var(--warning)', fontSize: '0.85rem', textAlign: 'center' }}>
-                    Modelo de IA indisponível — apenas vídeo ativo, sem análise.
+                <div className="badge badge-yellow" style={{ padding: 'var(--space-2) var(--space-3)', justifyContent: 'center' }}>
+                    Modelo de IA indisponível — apenas vídeo ativo
                 </div>
             )}
 
             {claimNotice && (
-                <div style={{
-                    padding: '0.6rem 0.8rem', borderRadius: 8,
-                    background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.35)',
-                    fontSize: '0.85rem', color: 'var(--warning)', textAlign: 'center',
-                }}>
-                    {claimNotice} — os dados ao vivo continuam visíveis no painel.
+                <div className="badge badge-yellow" style={{ padding: 'var(--space-2) var(--space-3)', justifyContent: 'center' }}>
+                    {claimNotice}
                 </div>
             )}
         </div>

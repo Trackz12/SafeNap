@@ -3,18 +3,18 @@ import { modelStatusStore, type ModelStatus } from '../ml/modelStatusStore';
 import { metricsStore } from '../detection/metricsStore';
 import { BrainCircuit, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
-const STATUS_LABEL: Record<ModelStatus, string> = {
-    idle: 'Modelo ML não carregado',
-    loading: 'Carregando modelo ML…',
-    ready: 'Modelo ML pronto',
-    error: 'Modelo ML com erro',
+const STATUS_CONFIG: Record<ModelStatus, { label: string; color: string; badge: string }> = {
+    idle:    { label: 'Modelo ML não carregado',  color: 'var(--text-muted)', badge: 'badge-muted' },
+    loading: { label: 'Carregando modelo ML…',    color: 'var(--warning)',    badge: 'badge-yellow' },
+    ready:   { label: 'Modelo ML pronto',         color: 'var(--primary)',    badge: 'badge-green' },
+    error:   { label: 'Modelo ML com erro',        color: 'var(--alarm)',      badge: 'badge-red' },
 };
 
-const STATUS_COLOR: Record<ModelStatus, string> = {
-    idle: 'var(--muted)',
-    loading: 'var(--warning)',
-    ready: 'var(--primary)',
-    error: 'var(--alarm)',
+const STATUS_ICONS: Record<ModelStatus, React.ReactNode> = {
+    idle:    <BrainCircuit size={14} />,
+    loading: <Loader2 size={14} className="spin" />,
+    ready:   <CheckCircle2 size={14} />,
+    error:   <AlertTriangle size={14} />,
 };
 
 export const MlStatusCard: React.FC = () => {
@@ -27,54 +27,53 @@ export const MlStatusCard: React.FC = () => {
             setStatus(modelStatusStore.getStatus());
             setError(modelStatusStore.getError());
         });
-
-        const unsubMetrics = metricsStore.subscribe((m) => {
-            setScore(m.mlScore);
-        });
-
-        return () => {
-            unsub();
-            unsubMetrics();
-        };
+        const unsubMetrics = metricsStore.subscribe((m) => setScore(m.mlScore));
+        return () => { unsub(); unsubMetrics(); };
     }, []);
 
-    const color = STATUS_COLOR[status];
+    const cfg = STATUS_CONFIG[status];
     const scorePct = score === null ? null : Math.round(score * 100);
+    const scoreColor = scorePct !== null
+        ? scorePct > 85 ? 'var(--alarm)' : scorePct > 70 ? 'var(--warning)' : 'var(--primary)'
+        : 'var(--text-muted)';
 
     return (
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '10px 14px',
-            borderRadius: '10px',
-            background: 'color-mix(in srgb, ' + color + ' 8%, transparent)',
-            border: '1px solid color-mix(in srgb, ' + color + ' 25%, transparent)',
-            fontSize: '0.85rem',
-        }}>
-            {status === 'loading' && <Loader2 size={18} color="var(--warning)" className="spin" />}
-            {status === 'ready' && <CheckCircle2 size={18} color="var(--primary)" />}
-            {status === 'error' && <AlertTriangle size={18} color="var(--alarm)" />}
-            {status === 'idle' && <BrainCircuit size={18} color="var(--muted)" />}
-
-            <div style={{ flex: 1 }}>
-                <div style={{ color, fontWeight: 600 }}>{STATUS_LABEL[status]}</div>
-                {error && (
-                    <div style={{ color: 'var(--alarm)', fontSize: '0.75rem' }}>
-                        {error}
-                    </div>
-                )}
-                {status === 'ready' && scorePct !== null && (
-                    <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>
-                        Score de sonolência: <strong style={{ color: scorePct > 85 ? 'var(--alarm)' : scorePct > 70 ? 'var(--warning)' : 'var(--primary)' }}>{scorePct}%</strong>
-                    </div>
-                )}
-                {status === 'ready' && scorePct === null && (
-                    <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>
-                        Aguardando frames…
-                    </div>
-                )}
+        <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+            <div className="glass-panel-header">
+                <span className="glass-panel-title">Modelo ML</span>
+                <span className={`badge ${cfg.badge}`}>
+                    {STATUS_ICONS[status]}
+                    {cfg.label}
+                </span>
             </div>
+
+            {error && (
+                <div style={{
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--alarm-dim)',
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--alarm)',
+                    lineHeight: 1.5,
+                }}>
+                    {error}
+                </div>
+            )}
+
+            {status === 'ready' && scorePct !== null && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Score de sonolência</span>
+                    <span style={{ fontWeight: 600, fontSize: 'var(--text-md)', color: scoreColor, fontVariantNumeric: 'tabular-nums' }}>
+                        {scorePct}%
+                    </span>
+                </div>
+            )}
+
+            {status === 'ready' && scorePct === null && (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)' }}>
+                    Aguardando frames…
+                </div>
+            )}
         </div>
     );
 };

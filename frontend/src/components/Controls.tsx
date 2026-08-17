@@ -3,14 +3,14 @@ import { Settings, Vibrate, Volume2, VolumeX, Link } from 'lucide-react';
 import { getApiUrl } from '../config/api';
 
 export const Controls: React.FC = () => {
-    const [port, setPort] = useState<string>("");
+    const [port, setPort] = useState('');
     const apiUrl = getApiUrl();
 
     const testHardware = async (command: string) => {
         try {
             await fetch(`${apiUrl}/hardware/test/${command}`, { method: 'POST' });
         } catch (e) {
-            console.error("Erro ao testar hardware", e);
+            console.error('Erro ao testar hardware', e);
         }
     };
 
@@ -19,46 +19,54 @@ export const Controls: React.FC = () => {
             const res = await fetch(`${apiUrl}/hardware/connect${port ? `?port=${port}` : ''}`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                alert("Arduino conectado com sucesso!");
+                alert('Arduino conectado com sucesso!');
             } else {
-                alert("Falha ao conectar no Arduino.");
+                alert('Falha ao conectar no Arduino.');
             }
         } catch (e) {
-            console.error("Erro ao conectar", e);
+            console.error('Erro ao conectar', e);
         }
     };
 
     return (
-        <div className="glass-panel">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Settings size={20} /> Controles Manuais
-            </h2>
+        <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+            <div className="glass-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <Settings size={14} color="var(--text-muted)" />
+                    <span className="glass-panel-title">Controles</span>
+                </div>
+            </div>
 
-            <div className="metric-card">
-                <h3>Conexão Arduino</h3>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                    <input 
-                        type="text" 
-                        placeholder="Ex: COM3 (opcional)" 
+            {/* Arduino connection */}
+            <div style={{ marginBottom: 'var(--space-3)' }}>
+                <div className="metric-label" style={{ marginBottom: 'var(--space-2)' }}>Conexão Arduino</div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <input
+                        type="text"
+                        className="input"
+                        placeholder="COM3 (opcional)"
                         value={port}
                         onChange={(e) => setPort(e.target.value)}
-                        style={{ padding: '0.5rem', borderRadius: '4px', border: 'none', flex: '1 1 150px' }}
+                        style={{ flex: 1, minWidth: 0 }}
                     />
-                    <button className="btn btn-secondary" onClick={connectArduino} style={{ flex: '1 1 auto' }}>
-                        <Link size={16} /> Conectar
+                    <button className="btn" onClick={connectArduino}>
+                        <Link size={14} /> Conectar
                     </button>
                 </div>
             </div>
 
-            <div className="controls-grid">
-                <button className="btn btn-secondary" onClick={() => testHardware("ALARM")}>
-                    <Volume2 size={16} /> Testar Alarme
+            <div className="divider" />
+
+            {/* Hardware tests */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+                <button className="btn" onClick={() => testHardware('ALARM')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+                    <Volume2 size={14} /> Alarme
                 </button>
-                <button className="btn btn-secondary" onClick={() => testHardware("VIBRATION")}>
-                    <Vibrate size={16} /> Testar Vibração
+                <button className="btn" onClick={() => testHardware('VIBRATION')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+                    <Vibrate size={14} /> Vibração
                 </button>
-                <button className="btn btn-secondary" onClick={() => testHardware("OFF")}>
-                    <VolumeX size={16} /> Desligar Alerta
+                <button className="btn" onClick={() => testHardware('OFF')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+                    <VolumeX size={14} /> Desligar
                 </button>
             </div>
         </div>

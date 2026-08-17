@@ -4,8 +4,7 @@ import { sessionStats, type HistoryPoint } from '../detection/sessionStats';
 const WINDOW_MS = 60000;
 const W = 600;
 const H = 160;
-const PAD = { top: 10, right: 8, bottom: 18, left: 30 };
-
+const PAD = { top: 10, right: 8, bottom: 20, left: 30 };
 const EAR_MAX = 0.5;
 
 function buildPath(points: HistoryPoint[], key: 'ear' | 'perclos', now: number): string {
@@ -13,7 +12,6 @@ function buildPath(points: HistoryPoint[], key: 'ear' | 'perclos', now: number):
     const plotW = W - PAD.left - PAD.right;
     const plotH = H - PAD.top - PAD.bottom;
     const start = now - WINDOW_MS;
-
     return points
         .map((p, i) => {
             const x = PAD.left + ((p.t - start) / WINDOW_MS) * plotW;
@@ -53,20 +51,16 @@ export const LiveChart: React.FC = () => {
             rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
-        return () => {
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        };
+        return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
     }, []);
 
     const now = Date.now();
     const history = sessionStats.getHistory().filter((p) => p.t >= now - WINDOW_MS);
-
     const plotW = W - PAD.left - PAD.right;
     const plotH = H - PAD.top - PAD.bottom;
     const baseline = PAD.top + plotH;
 
     const yScale = [0, 0.15, 0.3, 0.45];
-    const perclosWarnLevel = 0.15;
     const earWarnLevel = 0.2;
 
     const earPath = buildPath(history, 'ear', now);
@@ -74,64 +68,76 @@ export const LiveChart: React.FC = () => {
     const perclosArea = buildArea(history, 'perclos', now);
 
     return (
-        <div className="glass-panel" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Últimos 60 segundos</h3>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span style={{ width: 18, height: 3, background: 'var(--primary)', display: 'inline-block', borderRadius: 2 }} />
+        <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <span className="glass-panel-title">Últimos 60 segundos</span>
+                <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span style={{ width: 14, height: 2, background: 'var(--primary)', borderRadius: 1, display: 'inline-block' }} />
                         EAR
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <span style={{ width: 18, height: 3, background: 'var(--warning)', display: 'inline-block', borderRadius: 2 }} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span style={{ width: 14, height: 2, background: 'var(--warning)', borderRadius: 1, display: 'inline-block' }} />
                         PERCLOS
                     </span>
                 </div>
             </div>
 
+            {/* Chart */}
             <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+                <defs>
+                    <linearGradient id="perclos-grad" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="var(--warning)" stopOpacity="0.15" />
+                        <stop offset="100%" stopColor="var(--warning)" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+
+                {/* Grid lines */}
                 {yScale.map((v) => {
                     const y = PAD.top + plotH - (v / EAR_MAX) * plotH;
                     return (
                         <g key={v}>
-                            <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                            <text x={PAD.left - 5} y={y + 3} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(2)}</text>
+                            <line x1={PAD.left} x2={W - PAD.right} y1={y} y2={y} stroke="var(--border-subtle)" strokeWidth="1" />
+                            <text x={PAD.left - 5} y={y + 3} textAnchor="end" fontSize="9" fill="var(--text-faint)">
+                                {v.toFixed(2)}
+                            </text>
                         </g>
                     );
                 })}
 
+                {/* Data */}
                 {history.length >= 2 && (
                     <>
-                        <path d={perclosArea} fill="rgba(250,204,21,0.08)" />
-                        <path d={perclosPath} fill="none" stroke="var(--warning)" strokeWidth="1.5" opacity="0.9" />
+                        <path d={perclosArea} fill="url(#perclos-grad)" />
+                        <path d={perclosPath} fill="none" stroke="var(--warning)" strokeWidth="1.5" opacity="0.7" />
                         <path d={earPath} fill="none" stroke="var(--primary)" strokeWidth="2" />
+
+                        {/* Warning thresholds */}
                         <line
                             x1={PAD.left} x2={W - PAD.right}
                             y1={PAD.top + plotH - (earWarnLevel / EAR_MAX) * plotH}
                             y2={PAD.top + plotH - (earWarnLevel / EAR_MAX) * plotH}
-                            stroke="var(--alarm)" strokeWidth="1" strokeDasharray="4 4" opacity="0.5"
-                        />
-                        <line
-                            x1={PAD.left} x2={W - PAD.right}
-                            y1={PAD.top + plotH - ((perclosWarnLevel * EAR_MAX) / EAR_MAX) * plotH}
-                            y2={PAD.top + plotH - ((perclosWarnLevel * EAR_MAX) / EAR_MAX) * plotH}
-                            stroke="var(--alarm)" strokeWidth="1" strokeDasharray="4 4" opacity="0.3"
+                            stroke="var(--alarm)" strokeWidth="1" strokeDasharray="4 4" opacity="0.4"
                         />
                     </>
                 )}
 
-                <line x1={PAD.left} x2={W - PAD.right} y1={baseline} y2={baseline} stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+                {/* Baseline */}
+                <line x1={PAD.left} x2={W - PAD.right} y1={baseline} y2={baseline} stroke="var(--border-default)" strokeWidth="1" />
 
+                {/* Empty state */}
                 {history.length < 2 && (
-                    <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="11" fill="var(--text-muted)">
-                        Aguardando dados do monitoramento...
+                    <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="11" fill="var(--text-faint)">
+                        Aguardando dados…
                     </text>
                 )}
 
+                {/* X-axis labels */}
                 {[0, 15, 30, 45, 60].map((s) => {
                     const x = PAD.left + (s / 60) * plotW;
                     return (
-                        <text key={s} x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
+                        <text key={s} x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--text-faint)">
                             {s === 60 ? 'agora' : `-${60 - s}s`}
                         </text>
                     );

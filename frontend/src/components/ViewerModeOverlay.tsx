@@ -43,24 +43,26 @@ export const ViewerModeOverlay: React.FC = () => {
     return (
         <div style={{
             position: 'absolute', inset: 0, zIndex: 40,
-            background: 'rgba(10,12,16,0.92)',
+            background: 'rgba(9,9,11,0.94)',
+            backdropFilter: 'blur(var(--blur-md))',
+            WebkitBackdropFilter: 'blur(var(--blur-md))',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: '0.8rem', padding: '1rem', textAlign: 'center', borderRadius: 12,
+            gap: 'var(--space-3)', padding: 'var(--space-4)', textAlign: 'center',
         }}>
             {!showWizard && !progress.isCalibrating && (
                 <>
                     <MonitorSmartphone size={40} color="var(--primary)" />
-                    <h3 style={{ margin: 0, fontSize: '1.05rem' }}>
+                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600 }}>
                         {remoteOwner ? 'Espelhando outro dispositivo' : 'Outro dispositivo já monitora'}
                     </h3>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: 320 }}>
+                    <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)', maxWidth: 320, lineHeight: 1.5 }}>
                         {remoteOwner
                             ? 'A câmera roda no dispositivo detector. Painel, alertas, calibração e dados de sessão são compartilhados em tempo real.'
                             : 'A vaga de detector está ocupada. Você vê os mesmos dados ao vivo.'}
                     </p>
                     {remoteOwner && (
                         <button
-                            className="btn btn-secondary"
+                            className="btn"
                             onClick={() => setShowWizard(true)}
                             style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                         >

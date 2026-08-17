@@ -21,18 +21,9 @@ export const MlTrainingCard: React.FC = () => {
             setDrowsyCount(userModelStore.getDrowsyCount());
             setHasModel(userModelStore.getModel() !== null);
         });
-        const unsubModel = modelStatusStore.subscribe(() => {
-            setModelStatus(modelStatusStore.getStatus());
-        });
-        const unsubRole = roleStore.subscribe(() => {
-            setRole(roleStore.getRole());
-        });
-
-        return () => {
-            unsubUser();
-            unsubModel();
-            unsubRole();
-        };
+        const unsubModel = modelStatusStore.subscribe(() => setModelStatus(modelStatusStore.getStatus()));
+        const unsubRole = roleStore.subscribe(() => setRole(roleStore.getRole()));
+        return () => { unsubUser(); unsubModel(); unsubRole(); };
     }, []);
 
     const canTrain = alertCount >= MIN_SAMPLES && drowsyCount >= MIN_SAMPLES;
@@ -48,28 +39,28 @@ export const MlTrainingCard: React.FC = () => {
         }, 100);
     };
 
-    const handleClear = () => {
-        userModelStore.clearAll();
-    };
-
     return (
-        <div className="glass-panel" style={{ padding: '0.75rem 1rem' }}>
-            <h3 style={{ margin: '0 0 0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-                <Brain size={16} color="var(--primary)" /> Treinamento ML
+        <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+            <div className="glass-panel-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <Brain size={14} color="var(--primary)" />
+                    <span className="glass-panel-title">Treinamento ML</span>
+                </div>
                 {isViewer && (
-                    <span style={{ marginLeft: 'auto', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--muted)' }}>
-                        <Eye size={12} /> Espelhando detector
+                    <span className="badge badge-muted">
+                        <Eye size={12} />
+                        Espelhando
                     </span>
                 )}
-            </h3>
+            </div>
 
             {isViewer ? (
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                     {model ? (
                         <>
-                            <div>Modelo sincronizado do detector ({model.sampleCount} amostras)</div>
+                            <div>Modelo sincronizado ({model.sampleCount} amostras)</div>
                             {model.trainedAt > 0 && (
-                                <div style={{ fontSize: '0.7rem', marginTop: 4 }}>
+                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)', marginTop: 'var(--space-1)' }}>
                                     Treinado em {new Date(model.trainedAt).toLocaleString('pt-BR')}
                                 </div>
                             )}
@@ -80,52 +71,66 @@ export const MlTrainingCard: React.FC = () => {
                 </div>
             ) : (
                 <>
-                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                        <div style={{ flex: 1, textAlign: 'center', padding: '6px', borderRadius: 6, background: 'rgba(0,200,120,0.08)' }}>
-                            <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>Alertas</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>{alertCount}</div>
+                    {/* Sample counts */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                        <div className="metric-card" style={{ textAlign: 'center', padding: 'var(--space-2)' }}>
+                            <div className="metric-label">Alertas</div>
+                            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}>
+                                {alertCount}
+                            </div>
                         </div>
-                        <div style={{ flex: 1, textAlign: 'center', padding: '6px', borderRadius: 6, background: 'rgba(255,80,80,0.08)' }}>
-                            <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>Sonolento</div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--alarm)' }}>{drowsyCount}</div>
+                        <div className="metric-card" style={{ textAlign: 'center', padding: 'var(--space-2)' }}>
+                            <div className="metric-label">Sonolento</div>
+                            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--alarm)', fontVariantNumeric: 'tabular-nums' }}>
+                                {drowsyCount}
+                            </div>
                         </div>
                     </div>
 
-                    <div style={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginBottom: '0.5rem' }}>
-                        <div style={{
-                            width: `${progress}%`,
-                            height: '100%',
-                            borderRadius: 2,
-                            background: canTrain ? 'var(--primary)' : 'var(--warning)',
-                            transition: 'width 0.3s',
-                        }} />
+                    {/* Progress bar */}
+                    <div style={{ marginBottom: 'var(--space-3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-1)' }}>
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Progresso</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{progress}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                            <div style={{
+                                width: `${progress}%`,
+                                height: '100%',
+                                borderRadius: 2,
+                                background: canTrain ? 'var(--primary)' : 'var(--warning)',
+                                transition: 'width 0.3s var(--ease-out)',
+                            }} />
+                        </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                         <button
                             className="btn btn-primary"
                             onClick={handleTrain}
                             disabled={!canTrain || training}
-                            style={{ flex: 1, fontSize: '0.75rem', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                            style={{ flex: 1, fontSize: 'var(--text-xs)' }}
                         >
                             {training ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
                             {hasModel ? 'Re-treinar' : 'Treinar'}
                         </button>
                         <button
                             className="btn"
-                            onClick={handleClear}
+                            onClick={() => userModelStore.clearAll()}
                             disabled={alertCount === 0 && drowsyCount === 0}
-                            style={{ fontSize: '0.75rem', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ fontSize: 'var(--text-xs)' }}
                         >
-                            <Trash2 size={14} /> Limpar
+                            <Trash2 size={14} />
                         </button>
                     </div>
 
-                    <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginTop: '0.4rem', textAlign: 'center' }}>
+                    {/* Status */}
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)', textAlign: 'center', marginTop: 'var(--space-2)' }}>
                         {!canTrain
-                            ? `Distilando ONNX → RF… (${Math.min(alertCount, MIN_SAMPLES) + Math.min(drowsyCount, MIN_SAMPLES)}/${MIN_SAMPLES * 2})`
+                            ? `Coletando dados… (${Math.min(alertCount, MIN_SAMPLES) + Math.min(drowsyCount, MIN_SAMPLES)}/${MIN_SAMPLES * 2})`
                             : modelStatus === 'ready'
-                                ? `Modelo ativo (${model ? `${model.sampleCount} amostras` : '…'})`
+                                ? `Modelo ativo (${model?.sampleCount ?? '…'} amostras)`
                                 : 'Modelo ainda não treinado'
                         }
                     </div>

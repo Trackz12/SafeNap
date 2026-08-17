@@ -2,10 +2,10 @@ import React from 'react';
 import { useMetrics } from '../detection/useMetrics';
 import type { DetectionState } from '../detection/detectionEngine';
 
-const STATE_CONFIG: Record<DetectionState, { color: string; label: string; sub: string }> = {
-    NORMAL: { color: 'var(--primary)', label: 'NORMAL', sub: 'Monitorando sem sinais de fadiga' },
-    WARNING: { color: 'var(--warning)', label: 'ATENÇÃO', sub: 'Sinais de fadiga detectados' },
-    ALARM: { color: 'var(--alarm)', label: 'PERIGO', sub: 'Sonolência confirmada — reaja!' },
+const STATE_CONFIG: Record<DetectionState, { color: string; label: string; sub: string; badge: string }> = {
+    NORMAL:  { color: 'var(--primary)',  label: 'Normal',   sub: 'Monitorando sem sinais de fadiga', badge: 'badge-green' },
+    WARNING: { color: 'var(--warning)',  label: 'Atenção',  sub: 'Sinais de fadiga detectados',      badge: 'badge-yellow' },
+    ALARM:   { color: 'var(--alarm)',    label: 'Perigo',   sub: 'Sonolência confirmada — reaja!',   badge: 'badge-red' },
 };
 
 const RADIUS = 74;
@@ -43,58 +43,116 @@ export const StatusGauge: React.FC = () => {
     }, [metrics.reason]);
 
     return (
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '1.5rem 1rem' }}>
-            <div style={{ position: 'relative', width: 190, height: 190 }}>
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', padding: 'var(--space-5) var(--space-6)' }}>
+            {/* Gauge ring */}
+            <div style={{ position: 'relative', width: 160, height: 160, flexShrink: 0 }}>
                 <svg viewBox="0 0 190 190" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-                    <circle cx="95" cy="95" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="12" />
-
+                    {/* Track */}
                     <circle
-                        cx="95" cy="95" r={RADIUS} fill="none"
+                        cx="95" cy="95" r={RADIUS}
+                        fill="none"
+                        stroke="var(--border-subtle)"
+                        strokeWidth="10"
+                    />
+
+                    {/* Value arc */}
+                    <circle
+                        cx="95" cy="95" r={RADIUS}
+                        fill="none"
                         stroke={cfg.color}
-                        strokeWidth="12"
+                        strokeWidth="10"
                         strokeLinecap="round"
                         strokeDasharray={CIRCUMFERENCE}
                         strokeDashoffset={dashOffset}
-                        style={{ transition: 'stroke-dashoffset 0.4s ease, stroke 0.4s ease', filter: `drop-shadow(0 0 6px ${cfg.color})` }}
+                        style={{
+                            transition: 'stroke-dashoffset 0.4s cubic-bezier(0.16,1,0.3,1), stroke 0.3s ease',
+                            filter: `drop-shadow(0 0 8px ${cfg.color}40)`,
+                        }}
                     />
 
+                    {/* Threshold markers */}
                     {[warningAngle, alarmAngle].map((angle, i) => (
                         <circle
                             key={i}
-                            cx="95" cy="95" r={RADIUS} fill="none"
+                            cx="95" cy="95" r={RADIUS}
+                            fill="none"
                             stroke={i === 0 ? 'var(--warning)' : 'var(--alarm)'}
-                            strokeWidth="4"
+                            strokeWidth="2"
                             strokeDasharray={`2 ${CIRCUMFERENCE - 2}`}
                             strokeDashoffset={-angle}
-                            opacity="0.85"
+                            opacity="0.6"
                         />
                     ))}
                 </svg>
 
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>PERCLOS</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: cfg.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                        {(perclosPct * 100).toFixed(0)}%
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>últimos 60s</div>
-                    <div style={{
-                        marginTop: '0.4rem',
-                        fontSize: '0.72rem',
+                {/* Center content */}
+                <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '1px',
+                }}>
+                    <span style={{
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 500,
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                    }}>PERCLOS</span>
+
+                    <span style={{
+                        fontSize: '2rem',
                         fontWeight: 700,
-                        letterSpacing: '0.1em',
                         color: cfg.color,
-                        border: `1px solid ${cfg.color}`,
-                        borderRadius: 999,
-                        padding: '2px 12px',
-                        background: 'rgba(0,0,0,0.3)',
+                        lineHeight: 1,
+                        fontVariantNumeric: 'tabular-nums',
+                        letterSpacing: '-0.03em',
                     }}>
-                        {cfg.label}
-                    </div>
+                        {(perclosPct * 100).toFixed(0)}%
+                    </span>
+
+                    <span style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--text-faint)',
+                    }}>últimos 60s</span>
                 </div>
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: '0.25rem' }}>
-                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{reason ?? cfg.sub}</div>
+            {/* Info */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <span className={`badge ${cfg.badge}`}>
+                        {cfg.label}
+                    </span>
+                </div>
+
+                <p style={{
+                    fontSize: 'var(--text-md)',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.4,
+                    margin: 0,
+                }}>
+                    {reason ?? cfg.sub}
+                </p>
+
+                {/* Mini status dots row */}
+                <div style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', opacity: metrics.state === 'NORMAL' ? 1 : 0.3 }} />
+                        Normal
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)', opacity: metrics.state === 'WARNING' ? 1 : 0.3 }} />
+                        Atenção
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--alarm)', opacity: metrics.state === 'ALARM' ? 1 : 0.3 }} />
+                        Perigo
+                    </span>
+                </div>
             </div>
         </div>
     );

@@ -28,24 +28,21 @@ export class MediaPipeManager {
     private offscreenCanvas: HTMLCanvasElement | null = null;
     private offscreenCtx: CanvasRenderingContext2D | null = null;
 
+    /** Handle do setTimeout do loop de detecção — permite cancelamento limpo. */
+    private loopTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Handle do requestAnimationFrame do loop. */
+    private loopRaf: number | null = null;
+
     constructor() {
         this.offscreenCanvas = document.createElement('canvas');
         this.offscreenCanvas.width = 320;
         this.offscreenCanvas.height = 240;
         this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
-        // Leve correção de brilho/contraste para estabilizar landmarks em
-        // ambientes escuros ou com back-lighting. Browsers antigos ignoram
-        // ctx.filter silenciosamente (fallback seguro).
         if (this.offscreenCtx) {
             this.offscreenCtx.filter = 'brightness(1.06) contrast(1.10)';
         }
     }
 
-    /**
-     * Redimensiona o canvas offscreen preservando o aspect ratio do vídeo.
-     * Sem isso, um vídeo retrato (celular) era esticado para 4:3 e distorcia
-     * os landmarks faciais, quebrando o EAR, o bocejo e a queda de cabeça.
-     */
     private ensureCanvasForVideo(videoElement: HTMLVideoElement): void {
         if (!this.offscreenCanvas || !this.offscreenCtx) return;
         const vw = videoElement.videoWidth;
@@ -63,7 +60,6 @@ export class MediaPipeManager {
     }
 
     private async resolveAssets(): Promise<{ wasmPath: string; modelPath: string }> {
-        // Prioriza assets auto-hospedados (funciona mesmo sem internet no caminho)
         if (await fetchExists(`${LOCAL_WASM_PATH}/vision_wasm_internal.js`)) {
             return { wasmPath: LOCAL_WASM_PATH, modelPath: LOCAL_MODEL_PATH };
         }
@@ -98,13 +94,25 @@ export class MediaPipeManager {
         return this.initializing;
     }
 
-    private async runDetectionLoop(videoElement: HTMLVideoElement) {
+    /** Cancela o loop de detecção de forma limpa, liberando handles. */
+    private cancelLoop(): void {
+        if (this.loopTimer !== null) {
+            clearTimeout(this.loopTimer);
+            this.loopTimer = null;
+        }
+        if (this.loopRaf !== null) {
+            cancelAnimationFrame(this.loopRaf);
+            this.loopRaf = null;
+        }
+    }
+
+    private runDetectionLoop(videoElement: HTMLVideoElement): void {
         if (!this.faceLandmarker || !this.isDetecting) return;
 
         if (!videoElement || videoElement.readyState < 3 || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
             if (this.isDetecting) {
-                setTimeout(() => {
-                    requestAnimationFrame(() => this.runDetectionLoop(videoElement));
+                this.loopTimer = setTimeout(() => {
+                    this.loopRaf = requestAnimationFrame(() => this.runDetectionLoop(videoElement));
                 }, 100);
             }
             return;
@@ -135,24 +143,44 @@ export class MediaPipeManager {
             }
         }
 
-        // Loop contínuo usando setTimeout para dar respiro à main thread (max ~10 FPS)
+        // Loop contínuo usando setTimeout para dar respiro à main thread (~10 FPS)
         if (this.isDetecting) {
-            setTimeout(() => {
-                requestAnimationFrame(() => this.runDetectionLoop(videoElement));
+            this.loopTimer = setTimeout(() => {
+                this.loopRaf = requestAnimationFrame(() => this.runDetectionLoop(videoElement));
             }, 100);
         }
     }
 
-    public startDetection(videoElement: HTMLVideoElement) {
+    public startDetection(videoElement: HTMLVideoElement): void {
+        this.cancelLoop();
         this.isDetecting = true;
         detectionEngine.reset();
         wsClient.sendEvent(EventType.FACE_DETECTED);
         this.runDetectionLoop(videoElement);
     }
 
-    public stopDetection() {
+    public stopDetection(): void {
+        this.cancelLoop();
         this.isDetecting = false;
         wsClient.sendEvent(EventType.FACE_LOST);
+    }
+
+    /**
+     * Libera o FaceLandmarker (memória WASM do MediaPipe).
+     * O modelo pode ser reinicializado depois via initialize() se necessário.
+     */
+    public async releaseModel(): Promise<void> {
+        this.stopDetection();
+        if (this.faceLandmarker) {
+            try {
+                this.faceLandmarker.close();
+            } catch {
+                // close() pode lançar se já foi fechado
+            }
+            this.faceLandmarker = null;
+            this.initializing = null;
+            console.log("MediaPipe FaceLandmarker liberado.");
+        }
     }
 }
 

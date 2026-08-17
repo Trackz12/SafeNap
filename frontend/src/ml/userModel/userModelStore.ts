@@ -17,6 +17,8 @@ const listeners = new Set<Listener>();
 
 let samples: Sample[] = [];
 let model: UserRF | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let dirty = false;
 
 function notify(): void {
     for (const cb of listeners) cb();
@@ -31,7 +33,25 @@ function loadSamples(): Sample[] {
     }
 }
 
-function saveSamples(): void {
+/** Salva no máximo 1x por segundo para não bloquear a main thread com I/O. */
+function scheduleSave(): void {
+    dirty = true;
+    if (saveTimer !== null) return;
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        if (!dirty) return;
+        dirty = false;
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
+        } catch {
+            // ignore
+        }
+    }, 1000);
+}
+
+function saveSamplesNow(): void {
+    if (saveTimer !== null) { clearTimeout(saveTimer); saveTimer = null; }
+    dirty = false;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
     } catch {
@@ -80,7 +100,7 @@ export const userModelStore = {
     addSample(features: number[], label: 0 | 1): void {
         if (features.length !== NUM_FEATURES) return;
         samples.push({ features, label, collectedAt: Date.now() });
-        saveSamples();
+        scheduleSave();
         notify();
     },
 
@@ -127,7 +147,7 @@ export const userModelStore = {
 
     clearSamples(): void {
         samples = [];
-        saveSamples();
+        saveSamplesNow();
         notify();
     },
 

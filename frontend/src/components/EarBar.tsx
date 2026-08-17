@@ -7,25 +7,34 @@ export const EarBar: React.FC<{ ear: number; threshold: number }> = ({ ear, thre
     const closed = ear < threshold;
 
     return (
-        <div style={{ width: '100%', background: 'rgba(0,0,0,0.6)', borderRadius: 6, padding: '4px 8px', marginTop: 4 }}>
-            <div style={{ position: 'relative', height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 4 }}>
+        <div style={{ width: '100%' }}>
+            {/* Progress bar */}
+            <div style={{ position: 'relative', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
                 <div style={{
                     position: 'absolute', left: 0, top: 0, bottom: 0,
                     width: `${pct}%`,
                     background: closed ? 'var(--alarm)' : 'var(--primary)',
-                    borderRadius: 4,
+                    borderRadius: 2,
                     transition: 'width 0.15s linear, background 0.2s',
+                    boxShadow: closed ? '0 0 8px var(--alarm)' : 'none',
                 }} />
                 <div style={{
-                    position: 'absolute', top: -2, bottom: -2,
+                    position: 'absolute', top: -3, bottom: -3,
                     left: `${thresholdPct}%`,
                     width: 2,
                     background: 'var(--alarm)',
+                    borderRadius: 1,
+                    opacity: 0.7,
                 }} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#e2e8f0', marginTop: 2 }}>
-                <span>EAR {ear.toFixed(3)}</span>
-                <span>limite {threshold.toFixed(3)}</span>
+            {/* Labels */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 'var(--text-xs)', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: closed ? 'var(--alarm)' : 'var(--primary)', fontWeight: closed ? 600 : 400 }}>
+                    EAR {ear.toFixed(3)}
+                </span>
+                <span style={{ color: 'rgba(255,255,255,0.5)' }}>
+                    limite {threshold.toFixed(3)}
+                </span>
             </div>
         </div>
     );
