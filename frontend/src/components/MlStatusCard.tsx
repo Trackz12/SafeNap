@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { modelStatusStore, type ModelStatus } from '../ml/modelStatusStore';
-import { drowsinessModel } from '../ml/drowsinessModel';
+import { metricsStore } from '../detection/metricsStore';
 import { BrainCircuit, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const STATUS_LABEL: Record<ModelStatus, string> = {
@@ -28,14 +28,13 @@ export const MlStatusCard: React.FC = () => {
             setError(modelStatusStore.getError());
         });
 
-        const interval = setInterval(() => {
-            const result = drowsinessModel.getLastScore();
-            setScore(result.score);
-        }, 500);
+        const unsubMetrics = metricsStore.subscribe((m) => {
+            setScore(m.mlScore);
+        });
 
         return () => {
             unsub();
-            clearInterval(interval);
+            unsubMetrics();
         };
     }, []);
 
