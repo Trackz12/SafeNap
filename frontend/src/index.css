@@ -511,3 +511,48 @@ select:focus {
   color: var(--text-secondary);
   white-space: nowrap;
 }
+
+/* ── Camera View ──────────────────────────────────── */
+.camera-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  background: #000;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+}
+
+@supports not (aspect-ratio: 4 / 3) {
+  .camera-wrapper {
+    height: 0;
+    padding-bottom: 75%;
+  }
+  .camera-wrapper .camera-video,
+  .camera-wrapper .camera-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  transform: scaleX(-1);
+  -webkit-transform: scaleX(-1);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.camera-overlay {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
