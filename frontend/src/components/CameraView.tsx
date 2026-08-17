@@ -62,8 +62,14 @@ export const CameraView: React.FC = () => {
             }
         };
 
+        const handlePageHide = () => {
+            handleVisibilityChange();
+            // Libera WASM do MediaPipe no unload real da página
+            mediaPipeManager.releaseModel();
+        };
+
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        window.addEventListener("pagehide", handleVisibilityChange);
+        window.addEventListener("pagehide", handlePageHide);
 
         const unsubRemoteCal = onRemoteCalibrationRequested((action) => {
             if (!cameraManager.isCameraActive()) return;
@@ -80,7 +86,7 @@ export const CameraView: React.FC = () => {
             clearTimeout(preloadTimer);
             unsubRemoteCal();
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("pagehide", handleVisibilityChange);
+            window.removeEventListener("pagehide", handlePageHide);
             if (cameraManager.isCameraActive()) {
                 cameraManager.stopCamera();
                 mediaPipeManager.stopDetection();
@@ -88,8 +94,8 @@ export const CameraView: React.FC = () => {
             cameraStatusStore.setActive(false);
             calibrationManager.cancelCalibration();
             mlDataCollector.stop();
-            // Libera o modelo MediaPipe (memória WASM) no unmount
-            mediaPipeManager.releaseModel();
+            // NÃO chamar releaseModel() aqui — o singleton precisa sobreviver
+            // entre re-renders do React. A liberação do WASM acontece no pagehide.
         };
     }, []);
 
