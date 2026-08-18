@@ -39,17 +39,21 @@ export const Controls: React.FC = () => {
 
             {/* Arduino connection */}
             <div style={{ marginBottom: 'var(--space-3)' }}>
-                <div className="metric-label" style={{ marginBottom: 'var(--space-2)' }}>Conexão Arduino</div>
+                <label className="metric-label" htmlFor="arduino-port" style={{ marginBottom: 'var(--space-2)', display: 'block' }}>
+                    Conexão Arduino
+                </label>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                     <input
+                        id="arduino-port"
                         type="text"
                         className="input"
                         placeholder="COM3 (opcional)"
                         value={port}
                         onChange={(e) => setPort(e.target.value)}
+                        aria-label="Porta serial do Arduino"
                         style={{ flex: 1, minWidth: 0 }}
                     />
-                    <button className="btn" onClick={connectArduino}>
+                    <button className="btn" onClick={connectArduino} aria-label="Conectar Arduino">
                         <Link size={14} /> Conectar
                     </button>
                 </div>
@@ -58,14 +62,14 @@ export const Controls: React.FC = () => {
             <div className="divider" />
 
             {/* Hardware tests */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
-                <button className="btn" onClick={() => testHardware('ALARM')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 'var(--space-2)' }}>
+                <button className="btn" onClick={() => testHardware('ALARM')} aria-label="Testar alarme sonoro" style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
                     <Volume2 size={14} /> Alarme
                 </button>
-                <button className="btn" onClick={() => testHardware('VIBRATION')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+                <button className="btn" onClick={() => testHardware('VIBRATION')} aria-label="Testar vibração" style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
                     <Vibrate size={14} /> Vibração
                 </button>
-                <button className="btn" onClick={() => testHardware('OFF')} style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
+                <button className="btn" onClick={() => testHardware('OFF')} aria-label="Desligar alerta" style={{ fontSize: 'var(--text-xs)', padding: 'var(--space-2)' }}>
                     <VolumeX size={14} /> Desligar
                 </button>
             </div>

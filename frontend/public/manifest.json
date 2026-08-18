@@ -1,20 +1,17 @@
 {
-  "name": "SAFENAP Web",
-  "short_name": "SAFENAP",
-  "description": "Sistema de Detecção de Sonolência",
+  "name": "SafeNap",
+  "short_name": "SafeNap",
+  "description": "Sistema Inteligente de Detecção de Fadiga",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0f1115",
-  "theme_color": "#4ade80",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "any",
+  "categories": ["health", "safety"],
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "/vite.svg",
-      "sizes": "512x512",
+      "src": "/favicon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     }
   ]

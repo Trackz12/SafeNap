@@ -53,8 +53,12 @@ CORS_ORIGINS = [
 vercel_origin = os.environ.get("VERCEL_URL")
 if vercel_origin:
     CORS_ORIGINS.append(f"https://{vercel_origin}")
-# Permite qualquer subdomínio tailscale
-CORS_ORIGINS.append("https://desktop-jvtc5nv.tail15c9a8.ts.net")
+# Permite Tailscale via env var (nao hardcode)
+CORS_EXTRA = os.environ.get("CORS_EXTRA_ORIGINS", "")
+for origin in CORS_EXTRA.split(","):
+    origin = origin.strip()
+    if origin:
+        CORS_ORIGINS.append(origin)
 
 app.add_middleware(
     CORSMiddleware,

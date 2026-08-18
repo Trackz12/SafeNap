@@ -271,6 +271,14 @@ body::before {
   transform: none;
 }
 
+/* Touch target: mínimo 44x44px para acessibilidade mobile */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
@@ -441,6 +449,28 @@ body::before {
   .app-container {
     grid-template-columns: 1fr;
     padding: var(--space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .app-container {
+    padding: var(--space-3);
+    gap: var(--space-4);
+  }
+  .app-header-inner {
+    padding: var(--space-2) var(--space-3);
+  }
+  .glass-panel {
+    padding: var(--space-3);
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

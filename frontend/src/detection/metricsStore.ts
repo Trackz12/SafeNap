@@ -2,7 +2,7 @@ import type { DetectionMetrics } from './detectionEngine';
 
 type Listener = (metrics: DetectionMetrics) => void;
 
-class MetricsStore {
+export class MetricsStore {
     private listeners: Listener[] = [];
     private latest: DetectionMetrics | null = null;
 
@@ -19,6 +19,11 @@ class MetricsStore {
 
     public get(): DetectionMetrics | null {
         return this.latest;
+    }
+
+    public reset(): void {
+        this.latest = null;
+        this.listeners = [];
     }
 
     public subscribe(cb: Listener): () => void {
