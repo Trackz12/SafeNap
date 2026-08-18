@@ -20,3 +20,5 @@ backend/dist/
 backend/*.spec
 backend/safenap_shared.json
 .vercel/
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json

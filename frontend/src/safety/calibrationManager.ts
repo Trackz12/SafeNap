@@ -107,7 +107,7 @@ export class CalibrationManager {
                     typeof data.calibratedAt === 'number' ? data.calibratedAt : Date.now();
             }
         } catch (e) {
-            console.warn("Calibração salva inválida; recalcule.", e);
+            console.warn("Calibração salva inválida; recalcule.", e instanceof Error ? e.message : e);
         }
     }
 

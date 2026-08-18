@@ -34,7 +34,10 @@ export const AlertOverlay: React.FC = () => {
             audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
 
             const playBeep = () => {
-                if (!audioCtx) return;
+                if (!audioCtx || audioCtx.state === 'closed') return;
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(() => {});
+                }
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 oscillator.type = 'square';

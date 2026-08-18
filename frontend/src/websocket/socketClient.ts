@@ -45,7 +45,9 @@ class WebSocketClient {
     private sessionId: string;
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 5;
-    private listeners: Map<string, Function[]> = new Map();
+    private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    private intentionalClose: boolean = false;
     public status: ConnectionStatus = "DISCONNECTED";
 
     constructor(url?: string) {
@@ -71,6 +73,7 @@ class WebSocketClient {
     public connect() {
         if (this.status === "CONNECTED" || this.status === "CONNECTING") return;
         
+        this.intentionalClose = false;
         this.status = "CONNECTING";
         this.notifyStatusChange();
 
@@ -117,6 +120,7 @@ class WebSocketClient {
     }
 
     private reconnect() {
+        if (this.intentionalClose) return;
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.error("Max reconnect attempts reached");
             return;
@@ -128,12 +132,19 @@ class WebSocketClient {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
         
         console.log(`Reconnecting in ${delay}ms...`);
-        setTimeout(() => {
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
             this.connect();
         }, delay);
     }
 
     public disconnect() {
+        this.intentionalClose = true;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
         if (this.socket) {
             this.socket.close();
             this.socket = null;
@@ -164,18 +175,18 @@ class WebSocketClient {
         this.addListener("message", callback);
     }
 
-    public on(event: string, callback: Function) {
+    public on(event: string, callback: (...args: any[]) => void) {
         this.addListener(event, callback);
     }
 
-    public off(event: string, callback: Function) {
+    public off(event: string, callback: (...args: any[]) => void) {
         const callbacks = this.listeners.get(event);
         if (callbacks) {
             this.listeners.set(event, callbacks.filter(cb => cb !== callback));
         }
     }
 
-    private addListener(event: string, callback: Function) {
+    private addListener(event: string, callback: (...args: any[]) => void) {
         if (!this.listeners.has(event)) {
             this.listeners.set(event, []);
         }

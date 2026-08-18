@@ -104,12 +104,21 @@ export const CalibrationWizard: React.FC<{
     const live = useCalibrationState(mode);
 
     useEffect(() => {
-        if (!visible || initRef.current) return;
+        if (!visible) {
+            initRef.current = false;
+            sawCalibratingRef.current = false;
+            return;
+        }
+        if (initRef.current) return;
         initRef.current = true;
         if (live.isCalibrating) {
             setStep('calibrating');
         } else {
             setStep(calibrationManager.isStale() && calibrationManager.isCalibrated() ? 'stale-prompt' : 'intro');
+            // Auto-iniciar calibração local ao abrir o wizard
+            if (mode === 'local' && !calibrationManager.isCalibrating) {
+                calibrationManager.startCalibration();
+            }
         }
     }, [visible, mode]);
 

@@ -127,7 +127,7 @@ export const DEFAULT_METRICS: DetectionMetrics = {
     yawnActive: false,
     noseDropRatio: 0,
     headDropped: false,
-    threshold: calibrationManager.getThreshold(),
+    threshold: 0.25, // fallback; será atualizado por publishLastFrame via calibrationManager.getThreshold()
     preset: 'standard',
     mlScore: null,
 };
@@ -264,7 +264,6 @@ export class DetectionEngine {
         this.lastMlScore = null;
         featureExtractor.reset();
         drowsinessModel.reset();
-        sessionStats.reset();
         wsClient.sendEvent(EventType.ALARM_ACKNOWLEDGED);
         this.publishLastFrame(DEFAULT_METRICS);
     }
@@ -553,7 +552,7 @@ export class DetectionEngine {
     }
 
     private publishLastFrame(metrics: DetectionMetrics): void {
-        metricsStore.publish(metrics);
+        metricsStore.publish({ ...metrics, threshold: calibrationManager.getThreshold() });
     }
 }
 

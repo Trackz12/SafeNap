@@ -19,7 +19,7 @@ export interface SafetySnapshot {
 export class SafetyEngine {
     private currentState: SafetyState = 'NORMAL';
     private reason: SafetyReason = null;
-    private listeners: Function[] = [];
+    private listeners: Array<(...args: any[]) => void> = [];
 
     constructor() {
         metricsStore.subscribe((metrics: DetectionMetrics) => {
