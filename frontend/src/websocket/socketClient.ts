@@ -57,10 +57,12 @@ class WebSocketClient {
             const envWs = import.meta.env.VITE_WS_URL as string | undefined;
             if (envWs) {
                 this.url = envWs;
-            } else {
+            } else if (typeof window !== 'undefined') {
                 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsHost = window.location.host;
                 this.url = `${wsProtocol}//${wsHost}/ws`;
+            } else {
+                this.url = 'ws://localhost/ws';
             }
         }
         this.sessionId = Math.random().toString(36).substring(2, 15);
