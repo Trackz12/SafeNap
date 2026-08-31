@@ -22,3 +22,10 @@ backend/safenap_shared.json
 .vercel/
 testsprite_tests/tmp/
 testsprite_tests/tmp/config.json
+
+# Arquivos de debug/troubleshooting
+debug_*.png
+view_screenshot.html
+check_gh.py
+testsprite_tests/
+
