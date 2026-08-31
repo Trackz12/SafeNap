@@ -10,12 +10,14 @@ import { AlertOverlay } from './components/AlertOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MlStatusCard } from './components/MlStatusCard';
 import { MlTrainingCard } from './components/MlTrainingCard';
+import { ToastContainer } from './components/ToastContainer';
 import { Shield } from 'lucide-react';
 
 function App() {
   return (
     <ErrorBoundary>
       <AlertOverlay />
+      <ToastContainer />
       <div className="app-shell">
         <header className="app-header">
           <div className="app-header-inner">

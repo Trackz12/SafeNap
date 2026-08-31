@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings, Vibrate, Volume2, VolumeX, Link, Loader2 } from 'lucide-react';
 import { getApiUrl } from '../config/api';
+import { toast } from './toast';
 
 export const Controls: React.FC = () => {
     const [port, setPort] = useState('');
@@ -14,10 +15,12 @@ export const Controls: React.FC = () => {
             const res = await fetch(`${apiUrl}/hardware/test/${command}`, { method: 'POST' });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             setHwStatus(`${command} enviado`);
+            toast.success(`Comando '${command}' enviado`);
             setTimeout(() => setHwStatus(null), 2000);
         } catch (e) {
             console.error('Erro ao testar hardware', e);
             setHwStatus(`Erro ao enviar ${command}`);
+            toast.error('Falha ao testar hardware');
             setTimeout(() => setHwStatus(null), 3000);
         }
     };
@@ -28,13 +31,13 @@ export const Controls: React.FC = () => {
             const res = await fetch(`${apiUrl}/hardware/connect${port ? `?port=${port}` : ''}`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
-                alert('Arduino conectado com sucesso!');
+                toast.success('Arduino conectado com sucesso!');
             } else {
-                alert(`Falha ao conectar no Arduino: ${data.error || 'desconhecido'}`);
+                toast.error(`Falha ao conectar: ${data.error || 'desconhecido'}`);
             }
         } catch (e) {
             console.error('Erro ao conectar', e);
-            alert(`Erro de conexão: ${e instanceof Error ? e.message : 'verifique se o backend está rodando'}`);
+            toast.error(`Erro de conexão: ${e instanceof Error ? e.message : 'backend offline?'}`);
         } finally {
             setConnecting(false);
         }
