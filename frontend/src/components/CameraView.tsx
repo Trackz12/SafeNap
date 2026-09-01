@@ -11,6 +11,7 @@ import { EarBar } from './EarBar';
 import { CalibrationWizard } from './CalibrationWizard';
 import { ViewerModeOverlay } from './ViewerModeOverlay';
 import { claimDetectorWithResponse, releaseDetector, onRemoteCalibrationRequested } from '../sync/multiDeviceSync';
+import { sessionHistory } from '../detection/sessionHistory';
 
 export const CameraView: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -151,6 +152,7 @@ export const CameraView: React.FC = () => {
                 cameraStatusStore.setActive(false);
                 calibrationManager.cancelCalibration();
                 mlDataCollector.stop();
+                sessionHistory.markSessionEnd();
                 setIsActive(false);
                 setShowWizard(false);
                 releaseDetector();
@@ -191,6 +193,7 @@ export const CameraView: React.FC = () => {
                 cameraStatusStore.setActive(true);
                 mlDataCollector.start();
                 drowsinessModel.initialize().catch(() => { });
+                sessionHistory.markSessionStart();
                 setShowWizard(true);
             } catch (aiErr: unknown) {
                 console.warn("Erro ao iniciar modelo de IA MediaPipe:", aiErr);

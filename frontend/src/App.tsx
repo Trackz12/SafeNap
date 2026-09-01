@@ -10,6 +10,7 @@ import { AlertOverlay } from './components/AlertOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MlStatusCard } from './components/MlStatusCard';
 import { MlTrainingCard } from './components/MlTrainingCard';
+import { SessionHistoryPanel } from './components/SessionHistoryPanel';
 import { ToastContainer } from './components/ToastContainer';
 import { Shield } from 'lucide-react';
 
@@ -84,6 +85,9 @@ function App() {
             </ErrorBoundary>
             <ErrorBoundary>
               <MlTrainingCard />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <SessionHistoryPanel />
             </ErrorBoundary>
           </div>
         </main>
