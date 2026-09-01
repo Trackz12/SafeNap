@@ -13,7 +13,7 @@ import { fuseSignals, isWarning, isAlarm } from './signalFusion';
 export type DetectionState = 'NORMAL' | 'WARNING' | 'ALARM';
 export type PresetName = 'lenient' | 'standard' | 'strict';
 export type AlarmReason = 'EYES_CLOSED_DURATION' | 'PERCLOS_CRITICAL' | 'ML_ALARM' | 'MICROSLEEP';
-export type WarningReason = 'PERCLOS' | 'YAWN' | 'HEAD_DROP' | 'FACE_LOST' | 'PROLONGED_CLOSE' | 'ML_WARNING' | 'EAR_TREND';
+export type WarningReason = 'PERCLOS' | 'YAWN' | 'HEAD_DROP' | 'FACE_LOST' | 'PROLONGED_CLOSE' | 'ML_WARNING' | 'EAR_TREND' | 'SLOW_BLINKS';
 
 export interface DetectionMetrics {
     state: DetectionState;
@@ -209,6 +209,9 @@ export class DetectionEngine {
     // TendÃªncia de sonolÃªncia: EAR declinante ao longo do tempo (sÃ³ olhos abertos).
     private longEarBuffer: Array<{ t: number; e: number }> = [];
 
+    // SEP: timestamps de piscadas lentas (400ms-microsleep) - marcador precoce.
+    private slowBlinkTimestamps: number[] = [];
+
     private startedAt: number | null = null;
     private lastHeartbeatAt = 0;
 
@@ -289,6 +292,7 @@ export class DetectionEngine {
         this.lastMicrosleepAt = -Infinity;
         this.microsleepStreak = 0;
         this.longEarBuffer = [];
+        this.slowBlinkTimestamps = [];
         this.startedAt = null;
         this.lastFeatureVector = null;
         this.lastMlScore = null;
@@ -326,6 +330,7 @@ export class DetectionEngine {
         this.microsleepCandidateSince = null;
         this.microsleepStreak = 0;
         this.longEarBuffer = [];
+        this.slowBlinkTimestamps = [];
         this.lastFeatureVector = null;
         this.lastMlScore = null;
         featureExtractor.reset();
@@ -434,6 +439,12 @@ export class DetectionEngine {
             if (duration >= this.config.minBlinkMs && duration <= this.config.maxBlinkMs) {
                 this.blinkTimestamps.push(now);
                 sessionStats.recordBlink(now);
+            }
+            // SEP (Slow Eye-closure Phase): piscada LENTA (acima do normal mas
+            // abaixo de microsleep) é marcador precoce de fadiga — a pálpebra
+            // desce devagar antes de qualquer fechamento crítico.
+            if (duration > this.config.maxBlinkMs && duration < this.config.microsleepAlarmMs) {
+                this.slowBlinkTimestamps.push(now);
             }
             if (duration >= this.config.drowsinessThresholdMs) {
                 sessionStats.recordEpisode(now);
@@ -592,6 +603,11 @@ export class DetectionEngine {
         // TendÃªncia de sonolÃªncia: fraÃ§Ã£o de declÃ­nio do EAR (olhos abertos) vs baseline.
         const trendFraction = this.computeEarTrendFraction();
 
+        // SEP: taxa de piscadas lentas nos últimos 60s. >=3 lentas/min é
+        // marcador precoce estabelecido de fadiga (pálpebra pesando).
+        const slowBlinkRate = this.slowBlinkRateAt(now);
+        const slowBlinksActive = slowBlinkRate >= 3;
+
         let ruleWarn: WarningReason | null = null;
         if (perclos >= this.config.perclosWarningLevel) ruleWarn = 'PERCLOS';
         else if (this.yawnActive) ruleWarn = 'YAWN';
@@ -600,6 +616,8 @@ export class DetectionEngine {
         else if (closedForMs >= this.config.warnCloseMs) ruleWarn = 'PROLONGED_CLOSE';
         // EAR declinante (fase prodrÃ´mica) â€” sÃ³ alerta se nÃ£o houver outra causa concreta.
         else if (trendFraction !== null && trendFraction >= this.config.earTrendWarnFraction) ruleWarn = 'EAR_TREND';
+        // Piscadas lentas frequentes: sinal fisiológico precoce independente.
+        else if (slowBlinksActive) ruleWarn = 'SLOW_BLINKS';
 
         let ruleAlarm: AlarmReason | null = null;
         // Microsleep dedicado tem prioridade: Ã© o sinal mais crÃ­tico (fechamento agudo).
@@ -743,6 +761,20 @@ export class DetectionEngine {
      * abertos). Retorna null se nÃ£o houver dados suficientes ou baseline.
      * DetÃ©m a fase prodrÃ´mica da sonolÃªncia (pÃ¡lpebra caindo gradualmente).
      */
+/**
+     * Taxa de piscadas LENTAS por minuto (janela 60s). Piscada lenta =
+     * fechamento entre maxBlinkMs e microsleepAlarmMs: nem piscada normal
+     * nem micro-sono — a "pálpebra pesando" clássica da fase precoce.
+     */
+    private slowBlinkRateAt(now: number): number {
+        const windowStart = now - 60000;
+        this.slowBlinkTimestamps = this.slowBlinkTimestamps.filter((t) => t > windowStart);
+        if (this.startedAt === null) return 0;
+        const observedMs = Math.min(60000, Math.max(1, now - this.startedAt));
+        // Normaliza por minuto observado (evita taxa inflada no comeco da sessao).
+        return this.slowBlinkTimestamps.length / (observedMs / 60000);
+    }
+
     private computeEarTrendFraction(): number | null {
         if (this.longEarBuffer.length < 20) return null;
         const baseline = calibrationManager.getBaseline();

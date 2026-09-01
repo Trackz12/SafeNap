@@ -13,6 +13,7 @@ const REASON_LABELS: Record<string, string> = {
     PROLONGED_CLOSE: 'Olhos fechados acima do normal',
     MICROSLEEP: 'Micro-sono detectado — reaja!',
     EAR_TREND: 'Sinais crescentes de fadiga (pálpebras pesando)',
+    SLOW_BLINKS: 'Piscadas lentas — sinais de fadiga',
     ML_WARNING: 'Modelo ML: alto risco de fadiga',
     ML_ALARM: 'Modelo ML: sonolência confirmada',
 };
