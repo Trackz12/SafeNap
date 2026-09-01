@@ -30,7 +30,32 @@ export const SessionStatsPanel: React.FC = () => {
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, []);
 
-    if (!snap) return null;
+    if (!snap) {
+        return (
+            <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
+                <div className="glass-panel-header">
+                    <span style={{
+                        display: 'inline-block',
+                        width: 80,
+                        height: '0.9rem',
+                        background: 'var(--bg-elevated)',
+                        borderRadius: 'var(--radius-sm)',
+                    }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-2)' }}>
+                    {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="metric-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            <div className="skeleton skeleton-circle" style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)' }} />
+                            <div style={{ flex: 1 }}>
+                                <div className="skeleton skeleton-text short" />
+                                <div className="skeleton skeleton-text" style={{ width: '40%', marginBottom: 0 }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>

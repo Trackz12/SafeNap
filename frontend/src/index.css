@@ -376,6 +376,29 @@ body::before {
   animation: spin 1s linear infinite;
 }
 
+/* ── Skeleton loading ──────────────────────────────── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  animation: shimmer 1.5s infinite;
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 37%, var(--bg-elevated) 63%);
+  background-size: 400% 100%;
+}
+
+.skeleton-text {
+  height: 0.875rem;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-text.short { width: 60%; }
+.skeleton-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
 /* Stagger children */
 .stagger > * {
   animation: fade-in var(--duration-slow) var(--ease-out) both;
