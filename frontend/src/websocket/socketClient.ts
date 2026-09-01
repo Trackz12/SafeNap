@@ -48,6 +48,9 @@ class WebSocketClient {
     private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private intentionalClose: boolean = false;
+    /** Callback opcional invocado ao (re)estabelecer a conexão — usado para
+     * re-sincronizar o estado de segurança (ex: re-emitir ALARM após reconnect). */
+    private onReconnectCallback: ((connected: boolean) => void) | null = null;
     public status: ConnectionStatus = "DISCONNECTED";
 
     constructor(url?: string) {
@@ -72,6 +75,11 @@ class WebSocketClient {
         return this.sessionId;
     }
 
+    /** Registra um callback invocado toda vez que a conexão (re)abre. */
+    public onReconnect(callback: (connected: boolean) => void): void {
+        this.onReconnectCallback = callback;
+    }
+
     public connect() {
         if (this.status === "CONNECTED" || this.status === "CONNECTING") return;
         
@@ -87,6 +95,10 @@ class WebSocketClient {
                 this.status = "CONNECTED";
                 this.reconnectAttempts = 0;
                 this.notifyStatusChange();
+                // Re-sincroniza estado de segurança com o backend (ex: re-emitir ALARM)
+                if (this.onReconnectCallback) {
+                    this.onReconnectCallback(true);
+                }
             };
 
             this.socket.onmessage = (event) => {

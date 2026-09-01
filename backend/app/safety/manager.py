@@ -17,6 +17,9 @@ class SafetyManager:
         self.current_state: SafetyState = SafetyState.NORMAL
         self._watchdog: threading.Timer | None = None
         self._lock = threading.Lock()
+        # True quando o watchdog desligou o hardware mas o estado ainda e ALARM.
+        # Permite reaplicar o hardware quando o frontend voltar sem virar NORMAL.
+        self._hardware_silenced = False
 
     def process_event(self, event: WebSocketMessage):
         """Avalia um evento e determina se o estado de seguranca deve mudar."""
@@ -36,7 +39,11 @@ class SafetyManager:
             elif event.type in (EventType.DROWSINESS_WARNING_ENDED, EventType.ALARM_ACKNOWLEDGED):
                 self.current_state = SafetyState.NORMAL
 
-            if self.current_state != previous_state:
+            new_alarm = self.current_state == SafetyState.ALARM
+            was_silenced_while_alarm = self._hardware_silenced and new_alarm
+
+            if self.current_state != previous_state or was_silenced_while_alarm:
+                self._hardware_silenced = False
                 self._apply_hardware_state()
 
             # Qualquer evento renovando o watchdog: a deteccao esta viva
@@ -52,6 +59,7 @@ class SafetyManager:
             logger.info("Todos os clientes desconectados: desligando hardware de alerta.")
             self._cancel_watchdog()
             self.current_state = SafetyState.NORMAL
+            self._hardware_silenced = False
             serial_manager.send_command("ALARM_OFF")
             serial_manager.send_command("VIBRATION_OFF")
 
@@ -68,13 +76,16 @@ class SafetyManager:
 
     def _watchdog_silence(self):
         """Desliga o hardware se os eventos pararam de chegar durante um alerta."""
+        with self._lock:
+            if self.current_state in (SafetyState.ALARM, SafetyState.WARNING):
+                self._hardware_silenced = True
         logger.warning("Watchdog: sem eventos durante alerta; desligando hardware por seguranca.")
         serial_manager.send_command("ALARM_OFF")
         serial_manager.send_command("VIBRATION_OFF")
 
     def _apply_hardware_state(self):
         """Traduz o estado de seguranca atual para comandos do Arduino."""
-        logger.info(f"Mudanca de estado: {self.current_state}")
+        logger.info(f"Tentativa de reaplicar hardware (silenced={self._hardware_silenced}): {self.current_state}")
         if self.current_state == SafetyState.ALARM:
             serial_manager.send_command("ALARM_ON")
         elif self.current_state == SafetyState.WARNING:

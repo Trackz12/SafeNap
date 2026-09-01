@@ -97,18 +97,41 @@ def get_status():
     }
 
 CLIENT_ERRORS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "client_errors.log")
+# Tamanho maximo do arquivo de log para evitar DoS por preenchimento de disco.
+CLIENT_ERRORS_LOG_MAX_BYTES = 500_000
+
+def _sanitize_log_field(value: str) -> str:
+    """Remove caracteres de controle / linhas para evitar log injection."""
+    return "".join(c for c in value if c.isprintable() or c in "\n\t").strip()
+
+def _ensure_client_log_size():
+    """Trunca o log de erros para nao crescer indefinidamente (ring buffer)."""
+    try:
+        if os.path.exists(CLIENT_ERRORS_LOG) and os.path.getsize(CLIENT_ERRORS_LOG) > CLIENT_ERRORS_LOG_MAX_BYTES:
+            with open(CLIENT_ERRORS_LOG, "r+", encoding="utf-8") as f:
+                f.seek(os.path.getsize(CLIENT_ERRORS_LOG) - CLIENT_ERRORS_LOG_MAX_BYTES)
+                tail = f.read()
+                f.seek(0)
+                f.truncate()
+                f.write(tail)
+    except Exception:
+        pass
 
 @app.post("/api/client-error")
 async def log_client_error(request: Request):
     """Recebe relatorios de erro do frontend (diagnostico mobile)."""
     try:
+        raw = await request.body()
+        if len(raw) > 16_000:
+            return {"ok": False, "error": "body_too_large"}
         body = await request.json()
     except Exception:
         body = {}
-    message = str(body.get("message", ""))[:2000]
-    stack = str(body.get("stack", ""))[:4000]
-    context = str(body.get("context", ""))[:200]
-    ua = str(body.get("userAgent", ""))[:300]
+    message = _sanitize_log_field(str(body.get("message", "")))[:2000]
+    stack = _sanitize_log_field(str(body.get("stack", "")))[:4000]
+    context = _sanitize_log_field(str(body.get("context", "")))[:200]
+    ua = _sanitize_log_field(str(body.get("userAgent", "")))[:300]
+    _ensure_client_log_size()
     with open(CLIENT_ERRORS_LOG, "a", encoding="utf-8") as f:
         f.write(f"=== {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
         f.write(f"UA: {ua}\n")

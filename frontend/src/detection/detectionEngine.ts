@@ -6,7 +6,7 @@ import type { FrameAnalysis } from '../vision/frameAnalyzer';
 import { featureExtractor, type FeatureVector } from './featureExtractor';
 import { drowsinessModel } from '../ml/drowsinessModel';
 import { mlDataCollector } from '../ml/mlDataCollector';
-import { ML_STALE_MS } from '../ml/thresholds';
+import { ML_STALE_MS, ML_RELEASE_THRESHOLD } from '../ml/thresholds';
 import { combineWarningReason, combineAlarmReason, type DetectionMode } from '../ml/mlReasons';
 
 export type DetectionState = 'NORMAL' | 'WARNING' | 'ALARM';
@@ -253,6 +253,26 @@ export class DetectionEngine {
         drowsinessModel.reset();
     }
 
+    /**
+     * Re-sincroniza o estado de alarme com o backend quando a conexão
+     * WebSocket é restabelecida. É a única forma de re-armar o hardware
+     * (buzzer/vibração) após uma queda de rede que disparou o watchdog.
+     */
+    public initReconnectSync(): void {
+        wsClient.onReconnect(() => {
+            if (this.state === 'ALARM') {
+                const now = Date.now();
+                this.lastHeartbeatAt = 0; // força próximo heartbeat imediato
+                this.heartbeatIfAlarm(now);
+                wsClient.sendEvent(EventType.DROWSINESS_STARTED, {
+                    reason: this.reason,
+                    perclos: this.perclosAt(now),
+                    closedForMs: 0,
+                });
+            }
+        });
+    }
+
     public ackAlarm(): void {
         this.segments = [];
         this.blinkTimestamps = [];
@@ -490,10 +510,12 @@ export class DetectionEngine {
     private evaluate(now: number, closedForMs: number, faceLostForMs: number): void {
         const perclos = this.perclosAt(now);
 
-        // ML score: usar se fresco, senão null (fallback para regras)
+        // ML score: manter se fresco. Em ALARM, manter o último score (mesmo
+        // levemente stale) para permitir hysteresis — evita flapping e falso
+        // negativo durante travadas de CPU que atrasam a inferência.
         const mlResult = drowsinessModel.getLastScore();
         const mlFresh = mlResult.at !== null && (now - mlResult.at) <= ML_STALE_MS;
-        this.lastMlScore = mlFresh ? mlResult.score : null;
+        this.lastMlScore = (mlFresh || this.state === 'ALARM') ? mlResult.score : null;
 
         let ruleWarn: WarningReason | null = null;
         if (perclos >= this.config.perclosWarningLevel) ruleWarn = 'PERCLOS';
@@ -510,7 +532,19 @@ export class DetectionEngine {
         const alarmReason = combineAlarmReason(this.detectionMode, ruleAlarm, this.lastMlScore);
 
         if (this.state === 'ALARM') {
-            if (alarmReason === null && !this.eyesClosed && perclos < this.config.perclosReleaseLevel) {
+            // Hysteresis de release do ML: em modos que usam ML, só libera o
+            // alarme quando o score ML cai claramente abaixo de ML_RELEASE_THRESHOLD,
+            // não apenas abaixo do threshold de alarme (evita flapping no 0.95).
+            const mlRelease = this.detectionMode !== 'rules'
+                ? (this.lastMlScore === null || this.lastMlScore < ML_RELEASE_THRESHOLD)
+                : true;
+
+            if (
+                alarmReason === null &&
+                mlRelease &&
+                !this.eyesClosed &&
+                perclos < this.config.perclosReleaseLevel
+            ) {
                 this.state = warnedReason ? 'WARNING' : 'NORMAL';
                 this.reason = warnedReason;
                 wsClient.sendEvent(EventType.DROWSINESS_ENDED, { perclos });
@@ -537,6 +571,17 @@ export class DetectionEngine {
             this.reason = warnedReason;
             sessionStats.recordWarning(now);
             this.emitStateEntry(perclos, warnedReason);
+            return;
+        }
+
+        // WARNING→WARNING: quando a causa muda (ex: PERCLOS→YAWN), atualiza a
+        // razão e re-emite o evento para que o badge e o backend mostrem a causa correta.
+        if (warnedReason !== null && this.state === 'WARNING' && warnedReason !== this.reason) {
+            this.reason = warnedReason;
+            wsClient.sendEvent(EventType.DROWSINESS_WARNING, {
+                reason: warnedReason,
+                perclos,
+            });
             return;
         }
 
