@@ -36,6 +36,8 @@ export const StatusGauge: React.FC = () => {
             HEAD_DROP: 'Cabeça abaixando',
             FACE_LOST: 'Rosto fora do enquadramento',
             PROLONGED_CLOSE: 'Olhos fechados acima do normal',
+            MICROSLEEP: 'Micro-sono detectado',
+            EAR_TREND: 'Fadiga crescente (pálpebras pesando)',
             ML_WARNING: 'Modelo ML: alto risco de fadiga',
             ML_ALARM: 'Modelo ML: sonolência confirmada',
         };

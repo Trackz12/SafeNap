@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DetectionEngine } from './detectionEngine';
 import { metricsStore } from './metricsStore';
 import { calibrationManager } from '../safety/calibrationManager';
+import type { FrameAnalysis } from '../vision/frameAnalyzer';
+
+/** Frame de teste: EAR alto (olhos abertos), boca fechada, cabeça neutra. */
+function makeFrame(ear: number): FrameAnalysis {
+    return { ear, earL: ear, earR: ear, mouthAspect: 0.2, noseDropRatio: 0.3, yawRatio: 0 };
+}
 
 describe('DetectionEngine presets', () => {
     let engine: DetectionEngine;
@@ -77,5 +83,62 @@ describe('DetectionEngine state via calibration + metrics', () => {
 
     it('can evaluate when calibration is skipped', () => {
         expect(calibrationManager.canEvaluate()).toBe(true);
+    });
+});
+
+describe('DetectionEngine microsleep & EAR trend', () => {
+    let engine: DetectionEngine;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault(); // threshold padrão 0.25
+        metricsStore.reset();
+        engine = new DetectionEngine();
+    });
+
+    afterEach(() => {
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    it('processFrame com olhos abertos mantém NORMAL', () => {
+        engine.processFrame(makeFrame(0.35));
+        engine.processFrame(makeFrame(0.34));
+        engine.processFrame(makeFrame(0.35));
+        expect(engine.getState()).toBe('NORMAL');
+        const m = metricsStore.get();
+        expect(m?.facePresent).toBe(true);
+        expect(m?.eyesClosed).toBe(false);
+    });
+
+    it('processFrame com EAR muito baixo acumula streak de fechamento', () => {
+        // 6 frames seguidos "bem fechados" (EAR < threshold*0.55 = 0.14)
+        for (let i = 0; i < 6; i++) {
+            engine.processFrame(makeFrame(0.08));
+        }
+        const m = metricsStore.get();
+        expect(m).not.toBeNull();
+        expect(m?.eyesClosed).toBe(true);
+    });
+
+    it('processNoFace publica métricas sem rosto', () => {
+        engine.processNoFace();
+        const m = metricsStore.get();
+        expect(m).not.toBeNull();
+        expect(m?.facePresent).toBe(false);
+    });
+
+    it('reset limpa estado após fechamentos', () => {
+        for (let i = 0; i < 6; i++) {
+            engine.processFrame(makeFrame(0.08));
+        }
+        expect(engine.getState()).not.toBe('ALARM');
+        engine.reset();
+        expect(engine.getState()).toBe('NORMAL');
+        // Após reset, buffer de microsleep está vazio: um único frame não deve
+        // fechar os olhos imediatamente (exige confirmação de N frames).
+        engine.processFrame(makeFrame(0.35));
+        const m = metricsStore.get();
+        expect(m?.eyesClosed).toBe(false);
     });
 });

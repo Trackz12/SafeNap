@@ -24,6 +24,28 @@ Proporção do tempo em que os olhos ficaram fechados dentro de uma janela desli
 
 **Anti-falso-positivo:** segmentos com duração menor que `perclosIgnoreMs` (400ms — duração típica de uma piscada) são **excluídos do PERCLOS**. Piscadas normais continuam sendo contadas, mas não inflam a métrica de sonolência.
 
+## Micro-sono (MICROSLEEP) — detector dedicado de evento agudo
+
+O PERCLOS é uma métrica de **janela de 60s**: um micro-sono isolado de 1.5–3s fica diluído na média e demora a escalar a severidade. O detector de micro-sono reage ao **evento agudo** em tempo real:
+
+- **Gatilho:** EAR < `threshold × microsleepThresholdFactor` (0.55 — olho *bem* fechado, não mero semi-fechado) sustentado por `microsleepAlarmMs` (600–2000ms conforme preset).
+- **Confirmação:** exige `closeConfirmFrames` frames consecutivos — mesmo anti-jitter do fechamento normal.
+- **Cooldown** (`microsleepCooldownMs`, 8–12s): evita re-alarmar dentro da mesma onda de sonolência.
+- **Prioridade máxima:** se micro-sono e outra razão disparam juntos, `MICROSLEEP` vence (é o sinal mais crítico).
+
+Fisiologicamente, micro-sonos são os marcadores mais perigosos de sonolência ao volante: o motorista perde consciência por 1–3s sem perceber. Este detector cobre a faixa que ficava entre o "PROLONGED_CLOSE" (aviso) e o fechamento longo (alarme).
+
+## Tendência de EAR (EAR_TREND) — fase prodrômica da sonolência
+
+Sonolência real **evolui gradualmente**: a pálpebra desce aos poucos (fadiga muscular) antes de qualquer fechamento franco. A máquina de estados era puramente instantânea nisso — um motorista cujo EAR decai de 0.30 → 0.22 lentamente não disparava nada até cruzar o threshold.
+
+- **Buffer de tendência:** amostras de EAR coletadas **apenas com olhos abertos** (piscadas não contaminam o declínio) numa janela de 60s (`longEarBuffer`).
+- **Sinal:** fração de declínio do EAR recente vs `baselineEar` calibrado. Se `(baseline - recent) / baseline > earTrendWarnFraction` (15–20% conforme preset), dispara WARNING `EAR_TREND`.
+- **Requer calibração:** sem baseline calibrado não há tendência (retorna null — não dispara com o threshold padrão).
+- **Alvo exato:** 20 amostras mínimas (~2s de dados) antes de avaliar — evita disparo por ruído de poucos frames.
+
+Isso dá ao sistema a capacidade de avisar o motorista **antes** do fechamento crítico: "pálpebras pesando" em vez de esperar o micro-sono.
+
 ## Máquina de estados (3 estágios, `detection/detectionEngine.ts`)
 
 ```
@@ -40,10 +62,12 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 | `HEAD_DROP` | queda do nariz acima do baseline + margem por ≥ 2000ms |
 | `FACE_LOST` | rosto ausente por ≥ 5s |
 | `PROLONGED_CLOSE` | olhos fechados ≥ 700ms |
+| `EAR_TREND` | EAR médio caiu > 18% abaixo do baseline calibrado na última 1min (fase prodrômica — pálpebras pesando gradualmente; medido apenas com olhos abertos) |
 
 ### → ALARM (razões)
 | Razão | Condição (preset padrão) |
 |-------|--------------------------|
+| `MICROSLEEP` | olhos **bem fechados** (EAR < threshold × 0.55) sustentado por ≥ 1800ms, com cooldown de 10s — detector dedicado independente do PERCLOS, captura o evento agudo que a janela de 60s dilui |
 | `EYES_CLOSED_DURATION` | olhos fechados continuamente ≥ 1500ms |
 | `PERCLOS_CRITICAL` | PERCLOS ≥ 45% |
 

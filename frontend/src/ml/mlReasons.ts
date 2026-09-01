@@ -1,8 +1,8 @@
 import { ML_WARNING_THRESHOLD, ML_ALARM_THRESHOLD } from './thresholds';
 
 export type DetectionMode = 'rules' | 'ml' | 'hybrid';
-export type WarningReason = 'PERCLOS' | 'YAWN' | 'HEAD_DROP' | 'FACE_LOST' | 'PROLONGED_CLOSE' | 'ML_WARNING';
-export type AlarmReason = 'EYES_CLOSED_DURATION' | 'PERCLOS_CRITICAL' | 'ML_ALARM';
+export type WarningReason = 'PERCLOS' | 'YAWN' | 'HEAD_DROP' | 'FACE_LOST' | 'PROLONGED_CLOSE' | 'ML_WARNING' | 'EAR_TREND';
+export type AlarmReason = 'EYES_CLOSED_DURATION' | 'PERCLOS_CRITICAL' | 'ML_ALARM' | 'MICROSLEEP';
 
 export function combineWarningReason(
     mode: DetectionMode,
