@@ -10,6 +10,8 @@ interface State {
     error: Error | null;
 }
 
+const IS_DEV = import.meta.env?.DEV === true;
+
 export class ErrorBoundary extends Component<Props, State> {
     private componentStack: string | null = null;
 
@@ -31,35 +33,33 @@ export class ErrorBoundary extends Component<Props, State> {
 
     public render() {
         if (this.state.hasError) {
-            const err = this.state.error;
-            const details = [
-                `Nome: ${err?.name ?? 'desconhecido'}`,
-                `Mensagem: ${err?.message ?? 'Erro desconhecido de renderização.'}`,
-                `Stack: ${err?.stack ?? 'sem stack'}`,
-                `Componente: ${this.componentStack ?? 'n/a'}`
-            ].join('\n');
-
             return (
                 <div className="glass-panel" style={{ padding: '2rem', color: 'var(--alarm)' }}>
-                    <h2 style={{ textAlign: 'center' }}>Ops! Ocorreu um erro na interface.</h2>
+                    <h2 style={{ textAlign: 'center' }}>Ops! Algo deu errado</h2>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', textAlign: 'center' }}>
-                        {err?.message || "Erro desconhecido de renderização."}
+                        Não foi possível carregar este componente. Tente recarregar a página.
                     </p>
-                    <pre style={{
-                        color: '#e2e8f0',
-                        background: 'rgba(0,0,0,0.4)',
-                        border: '1px solid var(--border-default)',
-                        borderRadius: '8px',
-                        padding: '1rem',
-                        fontSize: '0.7rem',
-                        lineHeight: 1.4,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        maxHeight: '40vh',
-                        overflowY: 'auto'
-                    }}>
-                        {details}
-                    </pre>
+
+                    {IS_DEV && this.state.error && (
+                        <pre style={{
+                            color: '#e2e8f0',
+                            background: 'rgba(0,0,0,0.4)',
+                            border: '1px solid var(--border-default)',
+                            borderRadius: '8px',
+                            padding: '1rem',
+                            fontSize: '0.7rem',
+                            lineHeight: 1.4,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            maxHeight: '40vh',
+                            overflowY: 'auto'
+                        }}>
+                            {this.state.error.message}
+                            {'\n\n'}
+                            {this.componentStack ?? ''}
+                        </pre>
+                    )}
+
                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '1rem' }}>
                         <button
                             className="btn btn-primary"
