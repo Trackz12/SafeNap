@@ -8,6 +8,7 @@ import { drowsinessModel } from '../ml/drowsinessModel';
 import { mlDataCollector } from '../ml/mlDataCollector';
 import { ML_STALE_MS, ML_RELEASE_THRESHOLD } from '../ml/thresholds';
 import { combineWarningReason, combineAlarmReason, type DetectionMode } from '../ml/mlReasons';
+import { fuseSignals, isWarning, isAlarm } from './signalFusion';
 
 export type DetectionState = 'NORMAL' | 'WARNING' | 'ALARM';
 export type PresetName = 'lenient' | 'standard' | 'strict';
@@ -611,10 +612,62 @@ export class DetectionEngine {
             ruleAlarm === 'MICROSLEEP' &&
             !inMicrosleepCooldown;
 
-        const warnedReason = combineWarningReason(this.detectionMode, ruleWarn, this.lastMlScore);
-        const alarmReason = microsleepTriggered || (ruleAlarm && ruleAlarm !== 'MICROSLEEP')
+        let warnedReason = combineWarningReason(this.detectionMode, ruleWarn, this.lastMlScore);
+        let alarmReason = microsleepTriggered || (ruleAlarm && ruleAlarm !== 'MICROSLEEP')
             ? ruleAlarm
             : combineAlarmReason(this.detectionMode, ruleAlarm !== 'MICROSLEEP' ? null : ruleAlarm, this.lastMlScore);
+
+        // ── Fusão multi-sinal (fallback inteligente) ─────────────────────
+        // Quando nenhuma regra binária dispara isoladamente, a soma ponderada
+        // dos sinais pode indicar sonolência clara: múltiplos sinais fracos
+        // somam evidência em vez de competir (ex: PERCLOS 26% + bocejo +
+        // cabeça caindo + ML 0.8 = warning sólido que o OR perderia).
+        if (
+            (warnedReason === null || alarmReason === null) &&
+            this.detectionMode !== 'rules'
+        ) {
+            const fusion = fuseSignals(
+                {
+                    perclos,
+                    yawnActive: this.yawnActive,
+                    headDropped: this.headDropped,
+                    faceLost: this.faceLostReported || faceLostForMs >= this.config.faceLostWarnMs,
+                    closedForMs,
+                    microsleepForMs: microDuration,
+                    earTrendFraction: trendFraction,
+                    mlScore: this.lastMlScore,
+                },
+                {
+                    perclosWarn: this.config.perclosWarningLevel,
+                    perclosAlarm: this.config.perclosAlarmLevel,
+                    warnCloseMs: this.config.warnCloseMs,
+                    alarmCloseMs: this.config.drowsinessThresholdMs,
+                    microsleepAlarmMs: this.config.microsleepAlarmMs,
+                    earTrendWarn: this.config.earTrendWarnFraction,
+                },
+            );
+            if (alarmReason === null && isAlarm(fusion)) {
+                // Fusão atingiu alarme sem gatilho binário único — usa a razão
+                // dominante (quando válida) ou ML_ALARM como razão.
+                const dom = fusion.dominantReason;
+                if (dom === 'ML_ALARM' || dom === 'MICROSLEEP') {
+                    alarmReason = dom as AlarmReason;
+                } else if (dom !== null && this.lastMlScore !== null && this.lastMlScore >= 0.95) {
+                    alarmReason = 'ML_ALARM';
+                } else if (dom !== null && dom === 'PERCLOS') {
+                    alarmReason = 'PERCLOS_CRITICAL';
+                } else {
+                    alarmReason = 'ML_ALARM';
+                }
+            }
+            if (warnedReason === null && isWarning(fusion)) {
+                const dom = fusion.dominantReason;
+                warnedReason = (dom === 'PERCLOS' || dom === 'YAWN' || dom === 'HEAD_DROP' ||
+                    dom === 'FACE_LOST' || dom === 'PROLONGED_CLOSE' || dom === 'EAR_TREND')
+                    ? (dom as WarningReason)
+                    : 'ML_WARNING';
+            }
+        }
 
         if (this.state === 'ALARM') {
             // Hysteresis de release do ML: em modos que usam ML, sÃ³ libera o
