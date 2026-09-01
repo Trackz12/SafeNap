@@ -52,10 +52,14 @@ class SerialManager:
         logger.info("Sondagem automatica da porta serial habilitada.")
 
     def stop_auto_connect(self):
-        """Interrompe a sondagem ate o proximo connect() explicito."""
+        """Interrompe a sondagem e garante que a thread terminou (sinaliza + join)."""
         if self._auto_connect_enabled:
             logger.info("Sondagem automatica da porta serial desativada.")
         self._auto_connect_enabled = False
+        thread = self._auto_connect_thread
+        if thread is not None:
+            thread.join(timeout=6.0)
+            self._auto_connect_thread = None
 
     def _auto_connect_loop(self):
         while self._auto_connect_enabled:
@@ -90,9 +94,13 @@ class SerialManager:
                 self._running = True
                 logger.info(f"Conectado à porta serial: {target_port}")
 
-                # Inicia a thread de leitura
-                self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
-                self._read_thread.start()
+                # Inicia a thread de leitura apenas se a anterior ja terminou,
+                # evitando duas threads lendo do mesmo porta (race/redundancia).
+                if self._read_thread is None or not self._read_thread.is_alive():
+                    self._read_thread = threading.Thread(target=self._read_loop, daemon=True)
+                    self._read_thread.start()
+                else:
+                    logger.warning("Thread de leitura anterior ainda ativa; reutilizada.")
 
                 self._trigger_status_change()
                 return True
@@ -119,6 +127,15 @@ class SerialManager:
                 except Exception as e:
                     logger.error(f"Erro ao desconectar: {e}")
             self.serial_conn = None
+        # Une a thread de leitura para garantir que ela terminou antes de
+        # uma futura reconexao (evita duas threads lendo no mesmo porta).
+        read_thread = self._read_thread
+        self._read_thread = None
+        if read_thread is not None and read_thread.is_alive() and read_thread is not threading.current_thread():
+            try:
+                read_thread.join(timeout=2.0)
+            except Exception:
+                pass
         self._trigger_status_change()
 
     def send_command(self, command: str) -> bool:
