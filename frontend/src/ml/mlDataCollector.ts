@@ -71,16 +71,18 @@ class MlDataCollector {
     }
 
     private resolveLabel(): 0 | 1 | null {
+        // Durante calibração: labels explícitos e confiáveis (open=alerta, closed=sonolente)
         if (calibrationManager.isCalibrating) {
             if (calibrationManager.phase === 'open') return 0;
             if (calibrationManager.phase === 'closed') return 1;
             return null;
         }
 
-        // Sem calibração válida (nem optado pelo threshold padrão) o estado
-        // do sistema não é confiável — não coleta para não contaminar o modelo.
+        // Sem calibração válida o estado do sistema não é confiável — não coleta.
         if (!calibrationManager.canEvaluate()) return null;
 
+        // Pseudo-labels do ONNX: fonte INDEPENDENTE do modelo do usuário,
+        // então não cria feedback loop. Só coleta com confiança alta.
         const mlResult = drowsinessModel.getLastScore();
         const mlFresh = mlResult.at !== null && (Date.now() - mlResult.at) <= ML_STALE_MS;
 
@@ -92,11 +94,13 @@ class MlDataCollector {
             return null;
         }
 
+        // Fallback sem ONNX: só coleta SONOLÊNCIA CONFIRMADA por regras (estado
+        // ALARM). NÃO rotula o estado NORMAL como "alerta": um condutor tends a
+        // sonolência mas abaixo dos thresholds é NORMAL, e rotulá-lo como 0
+        // (alerta) contaminaria o treinamento com falsos positivos. Além disso,
+        // o label 0 só vem de calibração ou ML de alta confiança — sem auto-confirmação.
         const state = detectionEngine.getState();
-        if (state === 'ALARM') return 1;
-        if (state === 'NORMAL') return 0;
-
-        return null;
+        return state === 'ALARM' ? 1 : null;
     }
 
     private async autoTrainCheck(): Promise<void> {

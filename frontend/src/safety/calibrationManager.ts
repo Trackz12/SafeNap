@@ -172,7 +172,9 @@ export class CalibrationManager {
     public addSample(ear: number, noseDropRatio?: number): void {
         if (!this.isCalibrating || this.phase === 'idle') return;
         if (Date.now() < this.settleUntil) return;
-        if (!Number.isFinite(ear) || ear <= 0) return;
+        // Rejeita EAR não-físico (<=0 ou >1.0): valores absurdos quebram a escala
+        // do threshold e gerariam falsos positivos na detecção de olhos fechados.
+        if (!Number.isFinite(ear) || ear <= 0 || ear > 1) return;
 
         if (this.phase === 'open') {
             this.openSamples.push(ear);
@@ -270,6 +272,19 @@ export class CalibrationManager {
         const closedMedian = median(this.closedSamples);
         const gap = openMedian - closedMedian;
 
+        // Piso físico do EAR aberto: um EAR "abal" impossivelmente baixo indica
+        // que o usuario nao abriu os olhos de verdade na fase 1 (ou foco ruim).
+        // Nesse caso a calibracao seria excessivamente sensivel (falsos positivos).
+        if (openMedian < 0.10) {
+            this.openSamples = [];
+            this.closedSamples = [];
+            this.noseDropSamples = [];
+            this.phaseStartedAt = null;
+            this.lastOutcome = 'gap';
+            this.notify();
+            return this.lastOutcome;
+        }
+
         if (gap < MIN_OPEN_CLOSED_GAP) {
             this.openSamples = [];
             this.closedSamples = [];
@@ -287,8 +302,11 @@ export class CalibrationManager {
             THRESHOLD_MIN,
             THRESHOLD_MAX,
         );
+        // Piso de amostras para o baseline de nose-drop (4.2): exige no minimo
+        // 5 amostras para a mediana ser estatisticamente significativa.
+        // Caso contrario mantem null (head-drop detection desativada).
         this.baselineNoseDrop =
-            this.noseDropSamples.length > 0
+            this.noseDropSamples.length >= 5
                 ? median(this.noseDropSamples)
                 : null;
 
