@@ -21,7 +21,13 @@ export const CameraView: React.FC = () => {
     const [fps, setFps] = useState(0);
     const [showWizard, setShowWizard] = useState(false);
     const [claimNotice, setClaimNotice] = useState<string | null>(null);
+    const [pauseNotice, setPauseNotice] = useState<string | null>(null);
     const metrics = useMetrics(200);
+
+    // Ref que espelha o estado atual das métricas — usada dentro de effects
+    // com deps vazias (o handler de visibilidade precisa do estado mais recente).
+    const metricsRef = useRef(metrics);
+    useEffect(() => { metricsRef.current = metrics; }, [metrics]);
 
     /** Ref para rastrear se o componente está montado (guard contra race conditions). */
     const mountedRef = useRef(true);
@@ -51,6 +57,10 @@ export const CameraView: React.FC = () => {
 
         const handleVisibilityChange = () => {
             if (document.hidden && cameraManager.isCameraActive()) {
+                // Se havia um alarme ativo quando o app ficou em segundo plano,
+                // avisa claramente que o monitoramento foi interrompido — um
+                // motorista sonolento nao deve ficar sem alerta silenciosamente.
+                const wasAlarm = metricsRef.current.state === 'ALARM' || metricsRef.current.state === 'WARNING';
                 cameraManager.stopCamera();
                 mediaPipeManager.stopDetection();
                 cameraStatusStore.setActive(false);
@@ -59,6 +69,11 @@ export const CameraView: React.FC = () => {
                 setIsActive(false);
                 setShowWizard(false);
                 releaseDetector();
+                if (wasAlarm) {
+                    setPauseNotice('Monitoramento pausado enquanto a tela esteve oculta (alerta ativo). Reabra o app e reative a câmera.');
+                } else {
+                    setPauseNotice('Monitoramento pausado enquanto a tela esteve oculta.');
+                }
             }
         };
 
@@ -302,6 +317,12 @@ export const CameraView: React.FC = () => {
             {claimNotice && (
                 <div className="badge badge-yellow" style={{ padding: 'var(--space-2) var(--space-3)', justifyContent: 'center' }}>
                     {claimNotice}
+                </div>
+            )}
+
+            {pauseNotice && (
+                <div className="badge badge-red" role="alert" style={{ padding: 'var(--space-2) var(--space-3)', justifyContent: 'center' }}>
+                    {pauseNotice}
                 </div>
             )}
         </div>
