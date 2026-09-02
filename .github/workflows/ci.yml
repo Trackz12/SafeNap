@@ -30,6 +30,9 @@ jobs:
         run: |
           npm ci || (echo "npm ci failed, trying npm install..." && npm install)
 
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
       - name: TypeScript check
         run: npx tsc -p tsconfig.app.json --noEmit
 
@@ -38,6 +41,9 @@ jobs:
 
       - name: Tests
         run: npm test
+
+      - name: E2E tests
+        run: npm run test:e2e
 
       - name: Build
         run: npm run build
