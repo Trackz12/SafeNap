@@ -11,6 +11,12 @@ class SerialManager:
     # desconectado (Arduino plugado apos o boot, queda de conexao, etc.)
     AUTO_CONNECT_INTERVAL_S = 5.0
 
+    # Health check: ping STATUS a cada PING_INTERVAL_S enquanto conectado.
+    # Se o Arduino nao responder por UNRESPONSIVE_AFTER_S, e marcado
+    # unresponsive (conectado fisicamente mas travado/sem firmware).
+    PING_INTERVAL_S = 10.0
+    UNRESPONSIVE_AFTER_S = 35.0
+
     def __init__(self, baudrate: int = 9600):
         self.baudrate = baudrate
         self.serial_conn = None
@@ -21,6 +27,9 @@ class SerialManager:
         self._auto_connect_enabled = False
         self._auto_connect_thread = None
         self.on_status_change_callback = None
+        # --- health check ---
+        self._ping_thread = None
+        self._last_response_at: float | None = None
 
     def autodetect_port(self) -> str | None:
         """Tenta encontrar uma porta serial disponível que possa ser o Arduino."""
@@ -102,6 +111,10 @@ class SerialManager:
                 else:
                     logger.warning("Thread de leitura anterior ainda ativa; reutilizada.")
 
+                # Health check: pinger periodico + reset do tracker de respostas.
+                self._last_response_at = time.time()
+                self._start_ping_thread()
+
                 self._trigger_status_change()
                 return True
             except Exception as e:
@@ -127,6 +140,7 @@ class SerialManager:
                 except Exception as e:
                     logger.error(f"Erro ao desconectar: {e}")
             self.serial_conn = None
+        self._stop_ping_thread()
         # Une a thread de leitura para garantir que ela terminou antes de
         # uma futura reconexao (evita duas threads lendo no mesmo porta).
         read_thread = self._read_thread
@@ -176,8 +190,62 @@ class SerialManager:
         self._teardown()
 
     def _handle_response(self, response: str):
-        # AQUI processamos respostas do Arduino, como "OK:ALARM_ON"
-        pass
+        """Qualquer resposta valida do Arduino renova o health check."""
+        if response.startswith(("OK:", "SAFENAP_READY")):
+            self._last_response_at = time.time()
+            if response == "OK:STATUS_ONLINE":
+                logger.debug("Health check: Arduino respondeu ao ping.")
+        elif response.startswith("ERR:"):
+            logger.warning(f"Arduino reportou erro: {response}")
+
+    # ---------- health check ----------
+
+    def _start_ping_thread(self):
+        if self._ping_thread is not None and self._ping_thread.is_alive():
+            return
+        self._ping_thread = threading.Thread(
+            target=self._ping_loop, daemon=True, name="serial-health-ping"
+        )
+        self._ping_thread.start()
+
+    def _stop_ping_thread(self):
+        thread = self._ping_thread
+        self._ping_thread = None
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            try:
+                thread.join(timeout=2.0)
+            except Exception:
+                pass
+
+    def _ping_loop(self):
+        """Envia STATUS periodicamente enquanto conectado; detecta Arduino
+        travado (conectado mas sem responder) e derruba para reconexao."""
+        while self._running and self.connected:
+            time.sleep(self.PING_INTERVAL_S)
+            if not self._running or not self.connected:
+                break
+            # Sem resposta por tempo demais: hardware travado — reconecta.
+            if self._last_response_at is not None:
+                silent_for = time.time() - self._last_response_at
+                if silent_for > self.UNRESPONSIVE_AFTER_S:
+                    logger.warning(
+                        f"Arduino sem resposta há {silent_for:.0f}s (travado?): reconectando."
+                    )
+                    self._handle_disconnect()
+                    break
+            self.send_command("STATUS")
+
+    def is_responsive(self) -> bool:
+        """Arduino conectado E respondendo aos pings de saúde."""
+        if not self.connected or self._last_response_at is None:
+            return False
+        return (time.time() - self._last_response_at) <= self.UNRESPONSIVE_AFTER_S
+
+    def last_response_age_s(self) -> float | None:
+        """Segundos desde a última resposta; None se nunca respondeu."""
+        if self._last_response_at is None:
+            return None
+        return time.time() - self._last_response_at
 
     def _trigger_status_change(self):
         if self.on_status_change_callback:

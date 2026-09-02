@@ -24,7 +24,13 @@ async def lifespan(app: FastAPI):
     # Callback executado em thread de background: precisa de call agendado
     # no event loop do asyncio para emitir o broadcast com seguranca.
     def on_serial_status_change(connected: bool):
-        msg = {"type": "HARDWARE_STATUS", "payload": {"connected": connected}}
+        msg = {
+            "type": "HARDWARE_STATUS",
+            "payload": {
+                "connected": connected,
+                "responsive": serial_manager.is_responsive(),
+            },
+        }
         try:
             asyncio.run_coroutine_threadsafe(
                 ws_manager.broadcast(json.dumps(msg)), loop
@@ -81,7 +87,10 @@ async def websocket_endpoint(websocket: WebSocket):
         # Estado atual para o novo cliente (ex: serial conectada antes da pagina abrir)
         await ws_manager.send_message(json.dumps({
             "type": "HARDWARE_STATUS",
-            "payload": {"connected": serial_manager.connected},
+            "payload": {
+                "connected": serial_manager.connected,
+                "responsive": serial_manager.is_responsive(),
+            },
         }), websocket)
 
         while True:
@@ -97,6 +106,8 @@ async def websocket_endpoint(websocket: WebSocket):
 def get_status():
     return {
         "serial_connected": serial_manager.connected,
+        "serial_responsive": serial_manager.is_responsive(),
+        "serial_last_response_age_s": serial_manager.last_response_age_s(),
         "active_ws_connections": len(ws_manager.active_connections),
         "safety_state": safety_manager.current_state,
         "detector_session": state_store.get_detector(),

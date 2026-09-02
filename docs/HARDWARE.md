@@ -24,3 +24,16 @@ Qualquer outro comando gera `ERR:UNKNOWN_COMMAND_[cmd]`.
 
 ## Autodetecção (Python)
 O backend usa a biblioteca `pyserial` para escanear a lista de `COMx` ativas. Ele tenta conectar na primeira porta que possuir "Arduino" ou "CH340" no descritivo (drivers comuns de clonados e originais).
+
+## Health Check (detecção de Arduino travado)
+
+Enquanto conectado, o backend faz **ping periódico** do comando `STATUS` (a cada 10s). Toda resposta válida do Arduino (`OK:*` ou `SAFENAP_READY`) renova o registro de vida.
+
+- **Arduino saudável**: responde ao ping → `is_responsive() = true`.
+- **Arduino travado** (conectado fisicamente mas sem firmware/loop): silêncio por mais de **35s** → o pinger **derruba a conexão** para acionar a reconexão automática (que pode até reconectar na mesma porta se o firmware voltar).
+- **Exposição**:
+  - `/api/status` → `serial_responsive: bool` + `serial_last_response_age_s`
+  - Evento WS `HARDWARE_STATUS` → payload `{ connected, responsive }` (broadcast em cada mudança de conexão)
+  - UI: badge no header — verde "Arduino" (saudável), amarelo "Travado" (conectado sem responder), cinza (desconectado).
+
+> Nota: firmware antigo sem suporte a `STATUS` também fica "travado" para o health check — atualize o sketch (`arduino/safenap/safenap.ino`) que já responde `OK:STATUS_ONLINE`.

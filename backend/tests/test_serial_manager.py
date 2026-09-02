@@ -3,6 +3,7 @@
 O pyserial é mockado para simular o Arduino sem hardware real.
 Cobre: connect/disconnect, guarda contra threads duplicadas (race), auto-connect.
 """
+import time
 from unittest.mock import patch, MagicMock
 from app.serial.manager import SerialManager
 
@@ -191,3 +192,107 @@ class TestReadThreadGuard:
         ):
             # Deve preferir o Arduino mesmo não sendo o primeiro da lista
             assert manager.autodetect_port() == "COM5"
+
+
+class TestHealthCheck:
+    """Ping periodico + deteccao de Arduino travado (conectado, sem resposta)."""
+
+    def test_is_responsive_false_when_disconnected(self):
+        manager = SerialManager()
+        assert manager.is_responsive() is False
+
+    def test_is_responsive_true_when_recent_response(self):
+        manager = SerialManager()
+        # Simula estado conectado + resposta recente
+        manager.connected = True
+        manager._last_response_at = time.time()
+        try:
+            assert manager.is_responsive() is True
+        finally:
+            manager.connected = False
+            teardown(manager)
+
+    def test_is_responsive_false_when_stale_response(self):
+        manager = SerialManager()
+        # Ultima resposta a mais de UNRESPONSIVE_AFTER_S
+        manager._last_response_at = time.time() - (SerialManager.UNRESPONSIVE_AFTER_S + 10)
+        try:
+            assert manager.is_responsive() is False
+        finally:
+            teardown(manager)
+
+    def test_handle_response_renews_health(self):
+        manager = SerialManager()
+        manager.connected = True
+        old = time.time() - 60
+        manager._last_response_at = old
+        manager._handle_response("OK:ALARM_ON")
+        # A resposta valida renovou o tracker
+        assert manager._last_response_at > old
+        assert manager.is_responsive() is True
+        manager.connected = False
+        teardown(manager)
+
+    def test_handle_response_ignores_garbage(self):
+        manager = SerialManager()
+        before = manager._last_response_at
+        manager._handle_response("lixo sem prefixo")
+        # Resposta invalida NAO renova a saude
+        assert manager._last_response_at == before
+
+    def test_ready_message_renews_health(self):
+        manager = SerialManager()
+        old = time.time() - 60
+        manager._last_response_at = old
+        manager._handle_response("SAFENAP_READY")
+        assert manager._last_response_at > old
+
+    def test_last_response_age_none_initially(self):
+        manager = SerialManager()
+        assert manager.last_response_age_s() is None
+
+    def test_ping_loop_disconnects_unresponsive(self):
+        """Pinger derruba a conexao quando o Arduino fica travado."""
+        manager = SerialManager()
+        mock_serial = make_serial_mock()
+        with patch("app.serial.manager.serial.Serial", return_value=mock_serial):
+            manager.connect("COM3")
+        try:
+            assert manager.connected is True
+            # Simula ultima resposta velha (Arduino travado)
+            with manager._lock:
+                manager._last_response_at = (
+                    time.time() - (SerialManager.UNRESPONSIVE_AFTER_S + 5)
+                )
+            # Roda uma iteracao do loop de ping
+            manager._ping_loop()
+            # Conexao derrubada para forcar reconexao
+            assert manager.connected is False
+        finally:
+            teardown(manager)
+
+    def test_ping_loop_sends_status_when_healthy(self):
+        manager = SerialManager()
+        mock_serial = make_serial_mock()
+        with patch("app.serial.manager.serial.Serial", return_value=mock_serial):
+            manager.connect("COM3")
+        try:
+            manager._last_response_at = time.time()  # saudavel
+            # Acelera: roda o loop com intervalo zerado para nao dormir 10s
+            with patch.object(SerialManager, "PING_INTERVAL_S", 0.0):
+                # Uma iteracao: envia STATUS e continua
+                import threading as _t
+                stop = _t.Event()
+                orig_send = manager.send_command
+                sent = []
+
+                def spy(cmd):
+                    sent.append(cmd)
+                    stop.set()
+
+                with patch.object(manager, "send_command", side_effect=spy):
+                    manager._ping_loop()
+                    # send_command foi chamado com STATUS
+                    assert "STATUS" in sent
+        finally:
+            teardown(manager)
