@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, Vibrate, Volume2, VolumeX, Link, Loader2 } from 'lucide-react';
-import { getApiUrl } from '../config/api';
+import { getApiUrl, getAuthHeaders } from '../config/api';
 import { toast } from './toast';
 
 export const Controls: React.FC = () => {
@@ -12,10 +12,13 @@ export const Controls: React.FC = () => {
     const testHardware = async (command: string) => {
         setHwStatus(`Enviando ${command}…`);
         try {
-            const res = await fetch(`${apiUrl}/hardware/test/${command}`, { method: 'POST' });
+            const res = await fetch(`${apiUrl}/hardware/test/${command}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             setHwStatus(`${command} enviado`);
-            toast.success(`Comando '${command}' enviado`);
+            toast.success(`Comando '${command}' enviado ao hardware`);
             setTimeout(() => setHwStatus(null), 2000);
         } catch (e) {
             console.error('Erro ao testar hardware', e);
@@ -28,7 +31,14 @@ export const Controls: React.FC = () => {
     const connectArduino = async () => {
         setConnecting(true);
         try {
-            const res = await fetch(`${apiUrl}/hardware/connect${port ? `?port=${port}` : ''}`, { method: 'POST' });
+            const res = await fetch(`${apiUrl}/hardware/connect${port ? `?port=${port}` : ''}`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+            });
+            if (res.status === 401) {
+                toast.error('Token de autenticação inválido — configure VITE_AUTH_TOKEN');
+                return;
+            }
             const data = await res.json();
             if (data.success) {
                 toast.success('Arduino conectado com sucesso!');

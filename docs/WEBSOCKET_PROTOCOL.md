@@ -2,6 +2,16 @@
 
 A comunicação em tempo real entre o Frontend e o Backend ocorre via WebSocket (`ws://localhost:8000/ws`, ou via origem HTTPS do túnel: `wss://<host>/ws`).
 
+## Autenticação
+
+O backend pode exigir um **token compartilhado** para proteger o hardware (buzzer/vibração) e o papel de detector de devices não autorizados na rede.
+
+- **Backend:** defina a env var `SAFENAP_AUTH_TOKEN` (gere com `python -c "import secrets; print(secrets.token_urlsafe(32))"`). Sem a variável, a autenticação fica **desativada** (modo dev) e um aviso é logado.
+- **WebSocket:** o token é enviado como query param na URL de conexão — `wss://<host>/ws?token=<TOKEN>`. Conexões recusadas são fechadas com code **1008** (policy violation).
+- **REST:** rotas de hardware (`/api/hardware/*`) exigem header `Authorization: Bearer <TOKEN>` (ou `?token=` na query). Respondem **401** quando inválido.
+- **Rotas abertas por design:** `/api/status` (diagnóstico) e `/api/client-error` (log de erros — precisa reportar inclusive falhas de auth).
+- **Frontend:** configure `VITE_AUTH_TOKEN` (mesmo valor do backend) — o `socketClient` anexa automaticamente à URL do WS e `getAuthHeaders()` injeta o header nos fetches.
+
 ## Formato da Mensagem
 
 Todas as mensagens enviadas pelo Frontend devem seguir o formato JSON abaixo:

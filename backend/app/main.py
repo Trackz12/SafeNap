@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -10,6 +10,7 @@ from app.websocket.manager import ws_manager
 from app.serial.manager import serial_manager
 from app.safety.manager import safety_manager
 from app.core.state_store import state_store
+from app.core.auth import require_rest_auth, check_ws_auth
 import json
 
 # Configura log
@@ -70,6 +71,11 @@ app.add_middleware(
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Autenticacao por token (?token=...): recusa com 1008 se invalido.
+    if not check_ws_auth(websocket):
+        logger.warning("WebSocket recusado: token invalido/ausente.")
+        await websocket.close(code=1008, reason="Token de autenticacao invalido")
+        return
     await ws_manager.connect(websocket)
     try:
         # Estado atual para o novo cliente (ex: serial conectada antes da pagina abrir)
@@ -142,17 +148,17 @@ async def log_client_error(request: Request):
     return {"ok": True}
 
 @app.post("/api/hardware/test/{command}")
-def test_hardware(command: str):
+def test_hardware(command: str, _: None = Depends(require_rest_auth)):
     """Endpoints de teste: ALARM, VIBRATION, OFF"""
     safety_manager.test_hardware(command)
     return {"status": "ok", "command": command}
 
 @app.post("/api/hardware/connect")
-def connect_hardware(port: str = None):
+def connect_hardware(port: str = None, _: None = Depends(require_rest_auth)):
     success = serial_manager.connect(port)
     return {"success": success}
 
 @app.post("/api/hardware/disconnect")
-def disconnect_hardware():
+def disconnect_hardware(_: None = Depends(require_rest_auth)):
     serial_manager.disconnect()
     return {"success": True}

@@ -68,6 +68,12 @@ class WebSocketClient {
                 this.url = 'ws://localhost/ws';
             }
         }
+        // Token de autenticacao (quando o backend exige): anexado como query
+        // param — headers customizados em WebSocket sao pouco portateis.
+        const token = (import.meta.env.VITE_AUTH_TOKEN as string | undefined)?.trim();
+        if (token && !this.url.includes('token=')) {
+            this.url += (this.url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+        }
         this.sessionId = Math.random().toString(36).substring(2, 15);
     }
 
