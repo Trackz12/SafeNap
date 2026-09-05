@@ -57,10 +57,14 @@ interface DetectionConfig {
     microsleepWarnMs: number;
     microsleepAlarmMs: number;
     microsleepCooldownMs: number;
-    /** TendÃªncia de sonolÃªncia: fraÃ§Ã£o de declÃ­nio do EAR contra o baseline. */
+    /** Tendência de sonolência: fração de declínio do EAR contra o baseline. */
     earTrendWarnFraction: number;
     earTrendAlarmFraction: number;
     earTrendWindowMs: number;
+    /** SEP: mín. de observação antes da taxa de piscadas lentas valer. */
+    slowBlinkMinObservationMs: number;
+    /** Histerese de release do WARNING (fração abaixo do nível de warn). */
+    warningReleaseFraction: number;
 }
 
 const PRESETS: Record<PresetName, DetectionConfig> = {
@@ -89,6 +93,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendWarnFraction: 0.20,
         earTrendAlarmFraction: 0.40,
         earTrendWindowMs: 60000,
+        slowBlinkMinObservationMs: 30000,
+        warningReleaseFraction: 0.80,
     },
     standard: {
         drowsinessThresholdMs: 1500,
@@ -115,6 +121,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendWarnFraction: 0.18,
         earTrendAlarmFraction: 0.35,
         earTrendWindowMs: 60000,
+        slowBlinkMinObservationMs: 30000,
+        warningReleaseFraction: 0.80,
     },
     strict: {
         drowsinessThresholdMs: 1000,
@@ -141,6 +149,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendWarnFraction: 0.15,
         earTrendAlarmFraction: 0.30,
         earTrendWindowMs: 60000,
+        slowBlinkMinObservationMs: 30000,
+        warningReleaseFraction: 0.80,
     },
 };
 
@@ -467,8 +477,10 @@ export class DetectionEngine {
 
         // TendÃªncia de sonolÃªncia: coleta EAR apenas com olhos abertos, para
         // que picos de blink/oclusÃ£o nÃ£o contaminem o declÃ­nio progressivo.
+        // Usa o EAR suavizado (mediana-3), não o cru: um frame de jitter
+        // não pode simular queda de pálpebra.
         if (!this.eyesClosed) {
-            this.longEarBuffer.push({ t: now, e: rawEar });
+            this.longEarBuffer.push({ t: now, e: ear });
             const cutoff = now - this.config.earTrendWindowMs;
             while (this.longEarBuffer.length > 0 && this.longEarBuffer[0].t < cutoff) {
                 this.longEarBuffer.shift();
@@ -734,8 +746,8 @@ export class DetectionEngine {
             return;
         }
 
-        // WARNINGâ†’WARNING: quando a causa muda (ex: PERCLOSâ†’YAWN), atualiza a
-        // razÃ£o e re-emite o evento para que o badge e o backend mostrem a causa correta.
+        // WARNING→WARNING: quando a causa muda (ex: PERCLOS→YAWN), atualiza a
+        // razão e re-emite o evento para que o badge e o backend mostrem a causa correta.
         if (warnedReason !== null && this.state === 'WARNING' && warnedReason !== this.reason) {
             this.reason = warnedReason;
             wsClient.sendEvent(EventType.DROWSINESS_WARNING, {
@@ -745,10 +757,23 @@ export class DetectionEngine {
             return;
         }
 
+        // Release do WARNING com histerese: sinais que oscilam na borda do
+        // limiar (PERCLOS ~25%, EAR_TREND ~18%) causavam flicker
+        // NORMAL↔WARNING a cada frame — "poluição de atenção" na tela.
+        // Agora só sai do WARNING quando a evidência cai para uma fração
+        // clara abaixo do nível de entrada (default 80% do warn level).
         if (warnedReason === null && this.state === 'WARNING') {
-            this.state = 'NORMAL';
-            this.reason = null;
-            wsClient.sendEvent(EventType.DROWSINESS_WARNING_ENDED, { perclos });
+            const releaseFactor = this.config.warningReleaseFraction;
+            const stillWarn = perclos >= this.config.perclosWarningLevel * releaseFactor ||
+                closedForMs >= this.config.warnCloseMs * releaseFactor ||
+                (trendFraction !== null &&
+                    trendFraction >= this.config.earTrendWarnFraction * releaseFactor) ||
+                slowBlinkRate >= 3 * releaseFactor;
+            if (!stillWarn) {
+                this.state = 'NORMAL';
+                this.reason = null;
+                wsClient.sendEvent(EventType.DROWSINESS_WARNING_ENDED, { perclos });
+            }
         }
     }
 
@@ -771,7 +796,10 @@ export class DetectionEngine {
         this.slowBlinkTimestamps = this.slowBlinkTimestamps.filter((t) => t > windowStart);
         if (this.startedAt === null) return 0;
         const observedMs = Math.min(60000, Math.max(1, now - this.startedAt));
-        // Normaliza por minuto observado (evita taxa inflada no comeco da sessao).
+        // Sem tempo mínimo de observação a taxa é inflada no início da
+        // sessão (1 piscada lenta em 5s = "12/min" = falso SLOW_BLINKS).
+        if (observedMs < this.config.slowBlinkMinObservationMs) return 0;
+        // Normaliza por minuto observado.
         return this.slowBlinkTimestamps.length / (observedMs / 60000);
     }
 
@@ -779,7 +807,15 @@ export class DetectionEngine {
         if (this.longEarBuffer.length < 20) return null;
         const baseline = calibrationManager.getBaseline();
         if (baseline === null || baseline <= 0) return null;
-        const recent = this.longEarBuffer[this.longEarBuffer.length - 1].e;
+        // Média das últimas N amostras suavizadas: resistente ao jitter do
+        // último frame — a pálpebra "pesando" é um declínio sustentado, não
+        // um mergulho isolado. Sem isso, 1 frame ruim = falso EAR_TREND.
+        const N = Math.min(10, this.longEarBuffer.length);
+        let sum = 0;
+        for (let i = this.longEarBuffer.length - N; i < this.longEarBuffer.length; i++) {
+            sum += this.longEarBuffer[i].e;
+        }
+        const recent = sum / N;
         if (recent <= 0) return null;
         return (baseline - recent) / baseline;
     }

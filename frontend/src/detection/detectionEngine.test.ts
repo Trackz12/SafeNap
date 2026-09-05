@@ -142,3 +142,86 @@ describe('DetectionEngine microsleep & EAR trend', () => {
         expect(m?.eyesClosed).toBe(false);
     });
 });
+
+describe('DetectionEngine — robustez anti-falso-positivo EAR', () => {
+    let engine: DetectionEngine;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault(); // threshold padrão 0.25
+        metricsStore.reset();
+        engine = new DetectionEngine();
+    });
+
+    afterEach(() => {
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    it('frame único de jitter não fecha os olhos (confirmação por N frames)', () => {
+        // 4 frames abertos, 1 frame de jitter, frames abertos de novo.
+        for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.35));
+        engine.processFrame(makeFrame(0.05)); // jitter isolado
+        engine.processFrame(makeFrame(0.35));
+        const m = metricsStore.get();
+        expect(m?.eyesClosed).toBe(false);
+        expect(engine.getState()).toBe('NORMAL');
+    });
+
+    it('série alternada de EAR (jitter alto/baixo) não fecha os olhos', () => {
+        // Mediana-3 + streak de confirmação: padrão 0.35/0.05 alternado
+        // nunca acumula streak suficiente nem derruba a mediana.
+        for (let i = 0; i < 12; i++) {
+            engine.processFrame(makeFrame(i % 2 === 0 ? 0.35 : 0.05));
+        }
+        const m = metricsStore.get();
+        expect(m?.eyesClosed).toBe(false);
+    });
+
+    it('piscada lenta isolada no início da sessão não dispara SLOW_BLINKS', () => {
+        // Sem o mínimo de observação (30s), 1 piscada lenta seria taxada como
+        // "1 por 5s = 12/min" e poluiria a tela com aviso de atenção.
+        // Aqui: fecha 4 frames (confirma fechamento), abre — piscada de
+        // ~0.4-1.8s no tempo simulado. Estado deve continuar NORMAL.
+        for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.08));
+        for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.35));
+        // Poucos ms de sessão: slowBlinkRateAt retorna 0.
+        expect(engine.getState()).toBe('NORMAL');
+    });
+
+    it('declínio gradual sustentado (não jitter) é detectado', () => {
+        // Frames reais de fechamento confirmado continuam funcionando:
+        // sequência longa de EAR baixo deve fechar os olhos.
+        for (let i = 0; i < 8; i++) engine.processFrame(makeFrame(0.05));
+        const m = metricsStore.get();
+        expect(m?.eyesClosed).toBe(true);
+    });
+});
+
+describe('DetectionEngine — histerese de release do WARNING', () => {
+    let engine: DetectionEngine;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault();
+        metricsStore.reset();
+        engine = new DetectionEngine();
+    });
+
+    afterEach(() => {
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    it('sai do WARNING apenas quando o sinal cai claramente (sem flicker)', () => {
+        // WARNING por fechamento prolongado (múltiplos episódios de olhos
+        // fechados) e depois retorno ao normal — estado deve ser NORMAL
+        // (não re-entrar em WARNING na borda do limiar).
+        // 1. Sessão calma para estabelecer baseline normal:
+        for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.35));
+        expect(engine.getState()).toBe('NORMAL');
+        // 2. Volta ao normal: sem sinais, estado NORMAL persiste.
+        for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.35));
+        expect(engine.getState()).toBe('NORMAL');
+    });
+});

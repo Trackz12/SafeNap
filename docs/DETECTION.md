@@ -39,10 +39,11 @@ Fisiologicamente, micro-sonos são os marcadores mais perigosos de sonolência a
 
 Sonolência real **evolui gradualmente**: a pálpebra desce aos poucos (fadiga muscular) antes de qualquer fechamento franco. A máquina de estados era puramente instantânea nisso — um motorista cujo EAR decai de 0.30 → 0.22 lentamente não disparava nada até cruzar o threshold.
 
-- **Buffer de tendência:** amostras de EAR coletadas **apenas com olhos abertos** (piscadas não contaminam o declínio) numa janela de 60s (`longEarBuffer`).
-- **Sinal:** fração de declínio do EAR recente vs `baselineEar` calibrado. Se `(baseline - recent) / baseline > earTrendWarnFraction` (15–20% conforme preset), dispara WARNING `EAR_TREND`.
+- **Buffer de tendência:** amostras de EAR **suavizado** (filtro de mediana-3, o mesmo usado para fechamento) coletadas **apenas com olhos abertos** (piscadas não contaminam o declínio) numa janela de 60s (`longEarBuffer`).
+- **Sinal:** fração de declínio da **média das últimas 10 amostras** suavizadas vs `baselineEar` calibrado. Se `(baseline - recent) / baseline > earTrendWarnFraction` (15–20% conforme preset), dispara WARNING `EAR_TREND`.
 - **Requer calibração:** sem baseline calibrado não há tendência (retorna null — não dispara com o threshold padrão).
 - **Alvo exato:** 20 amostras mínimas (~2s de dados) antes de avaliar — evita disparo por ruído de poucos frames.
+- **Anti-falso-positivo:** a média das últimas 10 amostras suavizadas exige um declínio **sustentado** — um frame isolado de jitter (queda brusca de EAR por 1 frame, comum no MediaPipe) não consegue simular pálpebra caindo gradualmente.
 
 Isso dá ao sistema a capacidade de avisar o motorista **antes** do fechamento crítico: "pálpebras pesando" em vez de esperar o micro-sono.
 
@@ -63,6 +64,7 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 | `FACE_LOST` | rosto ausente por ≥ 5s |
 | `PROLONGED_CLOSE` | olhos fechados ≥ 700ms |
 | `EAR_TREND` | EAR médio caiu > 18% abaixo do baseline calibrado na última 1min (fase prodrômica — pálpebras pesando gradualmente; medido apenas com olhos abertos) |
+| `SLOW_BLINKS` | ≥ 3 piscadas lentas (400ms–1800ms) por minuto — exige ≥ 30s de sessão antes de valer (evita taxa inflada no início) |
 
 ### → ALARM (razões)
 | Razão | Condição (preset padrão) |
@@ -73,6 +75,9 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 
 ### Saída do ALARM
 Requer olhos reabertos **E** PERCLOS < 15% (release level) — evita sair do alarme só por uma piscada rápida. Pode descer direto para WARNING se ainda houver sinal de aviso ativo.
+
+### Saída do WARNING (histerese)
+O WARNING não é liberado no primeiro frame abaixo do limiar: só sai do estado quando os sinais caem para uma **fração clara** (default 80%) dos níveis de entrada — PERCLOS < 20%, EAR_TREND < 14%, etc. Isso elimina o flicker NORMAL↔WARNING quando o sinal oscila na borda do limiar (ex: PERCLOS ~25%) sem perder sensibilidade de entrada.
 
 O usuário pode confirmar que está acordado via UI (`ALARM_ACKNOWLEDGED`), que silencia o alarme e zera as métricas da sessão.
 
