@@ -165,10 +165,15 @@ class TestDetectorNegotiation:
 
 
 class TestSafetyEventRouting:
+    """SAFETY_EVENTS/SYNC_EVENTS só podem vir da conexão que É o detector
+    atual (ver TestDetectorOnlyAuthorization) — por isso cada teste aqui
+    reivindica o papel via DETECTOR_CLAIM antes de mandar o evento."""
+
     async def test_drowsiness_event_reaches_safety_manager(self):
         manager = ConnectionManager()
         ws = make_ws()
         await manager.connect(ws)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws)
 
         with patch("app.websocket.manager.safety_manager") as mock_safety:
             await manager.handle_message(
@@ -181,6 +186,7 @@ class TestSafetyEventRouting:
         ws_detector, ws_viewer = make_ws(), make_ws()
         await manager.connect(ws_detector)
         await manager.connect(ws_viewer)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws_detector)
         ws_viewer.send_text.reset_mock()
 
         payload = {"metrics": {"ear": 0.31, "perclos": 0.1}}
@@ -194,6 +200,7 @@ class TestSafetyEventRouting:
         manager = ConnectionManager()
         ws = make_ws()
         await manager.connect(ws)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws)
 
         with patch("app.websocket.manager.safety_manager") as mock_safety:
             await manager.handle_message(make_msg("HEARTBEAT", "s1"), ws)
@@ -210,8 +217,124 @@ class TestSafetyEventRouting:
         manager = ConnectionManager()
         ws = make_ws()
         await manager.connect(ws)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws)
         # Evento desconhecido não quebra e não toca no safety_manager
         with patch("app.websocket.manager.safety_manager") as mock_safety:
             await manager.handle_message(make_msg("FACE_DETECTED", "s1"), ws)
             # FACE_DETECTED é safety event — processa
             mock_safety.process_event.assert_called_once()
+
+
+class TestDetectorOnlyAuthorization:
+    """Regressão do achado de segurança: SAFETY_EVENTS/SYNC_EVENTS/
+    DETECTOR_RELEASE só podem vir da conexão que É o detector atual —
+    nunca de um session_id autodeclarado no corpo da mensagem, que
+    qualquer cliente pode forjar."""
+
+    async def test_viewer_cannot_send_safety_event(self):
+        manager = ConnectionManager()
+        ws_detector, ws_viewer = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_viewer)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws_detector)
+
+        with patch("app.websocket.manager.safety_manager") as mock_safety:
+            # Viewer tenta silenciar um alarme que não é dele
+            await manager.handle_message(make_msg("ALARM_ACKNOWLEDGED", "s2"), ws_viewer)
+            mock_safety.process_event.assert_not_called()
+
+    async def test_viewer_spoofing_detector_session_id_is_still_rejected(self):
+        """O ponto central do fix: nao basta mentir o session_id no corpo
+        da mensagem -- a autorizacao usa a identidade da conexao."""
+        manager = ConnectionManager()
+        ws_detector, ws_attacker = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_attacker)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws_detector)
+
+        with patch("app.websocket.manager.safety_manager") as mock_safety:
+            # Mesma session_id do detector real, mas de outra conexão.
+            await manager.handle_message(
+                make_msg("ALARM_ACKNOWLEDGED", "device-1"), ws_attacker
+            )
+            mock_safety.process_event.assert_not_called()
+
+    async def test_viewer_cannot_forge_sync_event(self):
+        manager = ConnectionManager()
+        ws_detector, ws_attacker = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_attacker)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws_detector)
+        ws_detector.send_text.reset_mock()
+
+        with patch("app.websocket.manager.state_store") as mock_store:
+            await manager.handle_message(
+                make_msg("MODEL_SYNC", "device-1", {"model": {"poisoned": True}}),
+                ws_attacker,
+            )
+            mock_store.update.assert_not_called()
+        # E nao foi reencaminhado para mais ninguém
+        ws_detector.send_text.assert_not_called()
+
+    async def test_viewer_cannot_hijack_claim_with_detectors_session_id(self):
+        """Mandar DETECTOR_CLAIM com o mesmo session_id do detector atual
+        (mas de outra conexão) não rouba a vaga."""
+        manager = ConnectionManager()
+        ws_detector, ws_attacker = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_attacker)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws_detector)
+
+        ws_attacker.send_text.reset_mock()
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws_attacker)
+
+        sent = json.loads(ws_attacker.send_text.call_args[0][0])
+        assert sent["type"] == "DETECTOR_TAKEN"
+        assert manager._detector_connection is ws_detector
+
+    async def test_viewer_cannot_release_detector_with_forged_session_id(self):
+        manager = ConnectionManager()
+        ws_detector, ws_attacker = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_attacker)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws_detector)
+
+        await manager.handle_message(make_msg("DETECTOR_RELEASE", "device-1"), ws_attacker)
+
+        assert manager._detector_connection is ws_detector
+
+    async def test_detector_itself_can_send_safety_and_sync_events(self):
+        """Garante que o fix nao quebrou o fluxo legitimo."""
+        manager = ConnectionManager()
+        ws = make_ws()
+        await manager.connect(ws)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws)
+
+        with patch("app.websocket.manager.safety_manager") as mock_safety:
+            await manager.handle_message(make_msg("DROWSINESS_STARTED", "s1"), ws)
+            mock_safety.process_event.assert_called_once()
+
+    async def test_oversized_message_is_dropped(self):
+        from app.websocket.manager import MAX_MESSAGE_BYTES
+
+        manager = ConnectionManager()
+        ws = make_ws()
+        await manager.connect(ws)
+
+        huge_payload = {"blob": "x" * (MAX_MESSAGE_BYTES + 1024)}
+        with patch("app.websocket.manager.safety_manager") as mock_safety:
+            await manager.handle_message(
+                make_msg("DROWSINESS_STARTED", "s1", huge_payload), ws
+            )
+            mock_safety.process_event.assert_not_called()
+
+    async def test_disconnecting_non_detector_does_not_clear_role(self):
+        manager = ConnectionManager()
+        ws_detector, ws_viewer = make_ws(), make_ws()
+        await manager.connect(ws_detector)
+        await manager.connect(ws_viewer)
+        await manager.handle_message(make_msg("DETECTOR_CLAIM", "s1"), ws_detector)
+
+        manager.disconnect(ws_viewer)
+
+        assert manager._detector_connection is ws_detector
