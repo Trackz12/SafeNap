@@ -39,33 +39,44 @@ de engenharia), **não** que os limiares escolhidos correspondem à sonolência
 real de uma pessoa (validação empírica) — essa segunda parte segue como
 trabalho futuro.
 
-## Validação com dados humanos reais (EAR) — pesquisado, não concluído
+## `ear_validation/` — EAR contra dados humanos reais (CEW) ✅ concluído
 
-Para fechar a lacuna acima (validar o EAR contra rótulos de olho aberto/
-fechado de pessoas reais, não só cenários sintéticos), pesquisamos datasets
-públicos de acesso livre, sem necessidade de aprovação acadêmica:
+A lacuna do item anterior foi fechada: validamos a classificação olho-
+aberto/fechado por EAR contra o **CEW (Closed Eyes in the Wild, NUAA)** —
+2423 pessoas reais (1192 com olhos fechados, 1231 abertos), fotos de rosto
+inteiro. Ver [`ear_validation/cew_results.md`](ear_validation/cew_results.md).
 
-- **MRL Eye Dataset** (84.898 imagens, rótulo aberto/fechado, download direto
-  sem cadastro: `http://mrl.cs.vsb.cz/data/eyedataset/mrlEyes_2018_01.zip`) —
-  **incompatível com nosso pipeline**: são recortes só do olho (infravermelho),
-  e nosso EAR é calculado a partir de landmarks de rosto inteiro (MediaPipe
-  FaceMesh) — não há rosto para detectar num recorte de olho.
-- **CEW — Closed Eyes in the Wild** (2423 sujeitos, 1192 fechados / 1231
-  abertos, imagens de **rosto inteiro com fundo** — compatível com nosso
-  pipeline). Download direto testado e confirmado nesta sessão (sem
-  cadastro, sem formulário): `https://drive.google.com/file/d/12DB4kwdeikxyQcK4gA7hL0QbzF6iOAZ2/view` —
-  arquivo `.rar` de 20MB.
+**Como foi resolvido o bloqueio anterior** (RAR sem `unrar`/7-Zip instalado):
+usamos `node-unrar-js` — o unrar oficial compilado para WASM, distribuído
+via npm — em vez de baixar um executável de terceiro. Isso ficou só no
+scratchpad da sessão, não entrou no repositório (a licença do CEW proíbe
+redistribuição, e o repositório é público).
 
-**Onde travou**: o arquivo é `.rar`, e este ambiente não tem `unrar`/`7-Zip`
-instalado para extrair. Não baixei um executável de terceiros pra resolver
-isso sozinho (mesmo sendo a ferramenta oficial e gratuita) — é uma decisão
-melhor tomada por quem vai rodar isso na própria máquina.
+**Resultado real** (`ml/scripts/validate_ear_against_cew.py`, réplica em
+Python da mesma fórmula de EAR do frontend, MediaPipe FaceLandmarker —
+mesmo modelo `.task` usado no navegador):
 
-**Próximo passo, se quiserem essa validação**: baixem o link acima (qualquer
-WinRAR/7-Zip já resolve) e coloquem a pasta extraída em `ml/data/raw/cew/`.
-A partir daí, o pipeline já existente (`ml/scripts/extract_features.py` —
-requer `pip install opencv-python-headless mediapipe` no `ml/.venv`, que
-ainda não estão instalados) processa as imagens com MediaPipe e calcula o
-EAR real de cada uma; eu escrevo o script de comparação contra os rótulos
-(`closed_eye_*`/`open_eye_*` no nome do arquivo) e gero a matriz de confusão
-real, com dados humanos de verdade.
+| Limiar | Acurácia | Precisão | Recall | F1 |
+|---|---|---|---|---|
+| 0,21 (calibrado, da bateria sintética) | 0,905 | 0,840 | 0,993 | 0,910 |
+| 0,25 (default da literatura) | 0,820 | 0,731 | 0,997 | 0,844 |
+
+**Leitura honesta**: recall é excelente (>99% — o sistema quase não deixa de
+detectar um olho realmente fechado, o que importa mais para segurança).
+Precisão é mais baixa (~84% no limiar calibrado) — com um limiar **fixo**
+igual para todo mundo, ~16% dos "fechados" detectados são na verdade olhos
+abertos de pessoas com formato de olho diferente da média. Isso **confirma
+empiricamente por que a calibração por pessoa (já implementada em
+produção) importa**: um limiar único para todo mundo é o cenário mais
+pessimista, não o que o usuário real experimenta.
+
+32 imagens (closed) e 4 (open) não tiveram rosto detectado pelo MediaPipe —
+excluídas da matriz, reportadas separadamente (limitação do detector na
+resolução 100×100 do dataset, não do cálculo de EAR em si).
+
+**Achado colateral**: `ml/scripts/extract_features.py` (pipeline de treino do
+modelo ONNX) usa a API antiga `mediapipe.solutions.face_mesh`, que **não
+existe mais** em nenhuma versão do mediapipe instalável neste Python
+(3.14) — teve que ser reescrito para a API `mediapipe.tasks.vision.FaceLandmarker`
+neste script novo. Vale atualizar o pipeline de treino também, mas ficou
+fora do escopo desta rodada.
