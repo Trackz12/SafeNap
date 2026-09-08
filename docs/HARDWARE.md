@@ -72,7 +72,20 @@ o valor ao `GripMonitor` (`backend/app/safety/grip_monitor.py`), que:
    tivesse voltado ao volante. O `GripMonitor` atual não reproduz esse
    comportamento — o alarme permanece enquanto a queda persistir, e só é
    silenciado por confirmação explícita do usuário (`ALARM_ACKNOWLEDGED`).
-5. Alimenta o `SafetyManager` como uma segunda fonte de sinal (independente
+   Para isso funcionar de verdade, o `GripMonitor` **renova o sinal a
+   cada leitura** enquanto o estado não for `NORMAL` (não só na mudança de
+   estado) — sem isso, o watchdog de segurança do `SafetyManager` (que
+   desliga o hardware após 15s sem nenhum sinal, pensado para o caso de a
+   aba do navegador travar) desligaria sozinho um alarme de garra
+   sustentado, reproduzindo por acidente o corte automático que este
+   item diz que não existe mais. É o mesmo papel do `HEARTBEAT` que o
+   frontend já manda a cada 3s durante um alarme de visão.
+5. **Reset em toda mudança de conexão serial**: ao cair ou reconectar, o
+   backend chama `grip_monitor.reset()` — evita avaliar a primeira
+   leitura pós-reconexão contra uma baseline antiga (possivelmente de um
+   sensor diferente) e evita que a UI mostre a última pressão conhecida
+   como se fosse ao vivo enquanto o hardware está desconectado.
+6. Alimenta o `SafetyManager` como uma segunda fonte de sinal (independente
    da visão/ML do frontend), fundida em **OR por severidade**: o estado
    efetivo do sistema é sempre o mais grave entre "visão" e "garra".
 

@@ -34,6 +34,7 @@ recuperar exige pressao acima de RECOVER_RATIO x baseline (RECOVER_RATIO
 """
 
 import logging
+import threading
 import time
 from typing import Callable
 
@@ -62,6 +63,7 @@ class GripMonitor:
 
     def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
+        self._lock = threading.Lock()
         self._baseline: float | None = None
         self._sample_count = 0
         self._gripped = True
@@ -74,43 +76,79 @@ class GripMonitor:
 
         Retorna True quando o estado do grip mudou (o chamador decide se
         emite um broadcast `GRIP_STATUS`)."""
-        self._last_pressure = pressure
-        now = self._clock()
+        with self._lock:
+            self._last_pressure = pressure
+            now = self._clock()
 
-        if self._baseline is None:
-            self._baseline = pressure
-            self._sample_count = 1
-            return False
+            if self._baseline is None:
+                self._baseline = pressure
+                self._sample_count = 1
+                return False
 
-        if self._sample_count < self.MIN_BASELINE_SAMPLES:
-            self._sample_count += 1
-            self._baseline += (pressure - self._baseline) / self._sample_count
-            return False
+            if self._sample_count < self.MIN_BASELINE_SAMPLES:
+                self._sample_count += 1
+                self._baseline += (pressure - self._baseline) / self._sample_count
+                return False
 
-        drop_threshold = self._baseline * self.DROP_RATIO
-        recover_threshold = self._baseline * self.RECOVER_RATIO
+            drop_threshold = self._baseline * self.DROP_RATIO
+            recover_threshold = self._baseline * self.RECOVER_RATIO
 
-        if self._gripped and pressure < drop_threshold:
-            self._gripped = False
-            self._lost_since = now
-            logger.info("Grip: queda de pressao detectada (pressao=%.1f, baseline=%.1f)", pressure, self._baseline)
-        elif not self._gripped and pressure > recover_threshold:
+            if self._gripped and pressure < drop_threshold:
+                self._gripped = False
+                self._lost_since = now
+                logger.info("Grip: queda de pressao detectada (pressao=%.1f, baseline=%.1f)", pressure, self._baseline)
+            elif not self._gripped and pressure > recover_threshold:
+                self._gripped = True
+                self._lost_since = None
+                logger.info("Grip: pressao restabelecida (pressao=%.1f, baseline=%.1f)", pressure, self._baseline)
+
+            # Baseline so acompanha a pressao enquanto a garra esta OK --
+            # congelada durante a queda para nao mascarar o proprio evento.
+            if self._gripped:
+                self._baseline += (pressure - self._baseline) * self.BASELINE_ALPHA
+
+            previous_state = self._state
+            self._state = self._evaluate_state(now)
+            changed = self._state != previous_state
+            should_notify = changed or self._state != SafetyState.NORMAL
+            notify_state = self._state
+
+        # Chamado fora do lock: process_grip_signal faz I/O (comando
+        # serial) e adquire o lock do SafetyManager -- nao ha motivo para
+        # segurar o lock do GripMonitor (e bloquear leituras de status())
+        # enquanto isso acontece.
+        #
+        # Renova o sinal enquanto o estado nao for NORMAL, nao so na
+        # mudanca: o watchdog do SafetyManager (15s sem sinal) desligaria
+        # sozinho um alarme de garra sustentado, exatamente o corte
+        # automatico que este modulo foi desenhado para NAO reproduzir.
+        # Mesmo papel do HEARTBEAT que o frontend ja manda a cada 3s
+        # durante ALARM.
+        if should_notify:
+            safety_manager.process_grip_signal(notify_state)
+        return changed
+
+    def reset(self) -> None:
+        """Limpa toda a calibracao e o estado atual.
+
+        Chamado quando a conexao serial cai ou reconecta: uma baseline
+        de antes da queda (possivelmente de um sensor/Arduino diferente)
+        nao deve ser avaliada contra a primeira leitura pos-reconexao —
+        isso pularia a fase de calibracao e poderia gerar alarme falso.
+        Tambem evita que a UI continue mostrando a ultima pressao
+        conhecida como se fosse ao vivo enquanto o hardware esta
+        desconectado."""
+        with self._lock:
+            previous_state = self._state
+            self._baseline = None
+            self._sample_count = 0
             self._gripped = True
             self._lost_since = None
-            logger.info("Grip: pressao restabelecida (pressao=%.1f, baseline=%.1f)", pressure, self._baseline)
+            self._state = SafetyState.NORMAL
+            self._last_pressure = 0.0
 
-        # Baseline so acompanha a pressao enquanto a garra esta OK --
-        # congelada durante a queda para nao mascarar o proprio evento.
-        if self._gripped:
-            self._baseline += (pressure - self._baseline) * self.BASELINE_ALPHA
-
-        previous_state = self._state
-        self._state = self._evaluate_state(now)
-
-        changed = self._state != previous_state
-        if changed:
-            safety_manager.process_grip_signal(self._state)
-        return changed
+        if previous_state != SafetyState.NORMAL:
+            safety_manager.process_grip_signal(SafetyState.NORMAL)
 
     def _evaluate_state(self, now: float) -> SafetyState:
         if self._gripped:
@@ -126,13 +164,14 @@ class GripMonitor:
 
     def status(self) -> dict:
         """Snapshot para o endpoint /api/status e o broadcast GRIP_STATUS."""
-        return {
-            "pressure": self._last_pressure,
-            "baseline": self._baseline,
-            "gripped": self._gripped,
-            "state": self._state,
-            "calibrated": self._sample_count >= self.MIN_BASELINE_SAMPLES,
-        }
+        with self._lock:
+            return {
+                "pressure": self._last_pressure,
+                "baseline": self._baseline,
+                "gripped": self._gripped,
+                "state": self._state,
+                "calibrated": self._sample_count >= self.MIN_BASELINE_SAMPLES,
+            }
 
 
 grip_monitor = GripMonitor()

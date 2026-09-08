@@ -25,6 +25,13 @@ async def lifespan(app: FastAPI):
     # Callback executado em thread de background: precisa de call agendado
     # no event loop do asyncio para emitir o broadcast com seguranca.
     def on_serial_status_change(connected: bool):
+        # Qualquer mudanca de conexao (cair OU reconectar) invalida a
+        # calibracao do GripMonitor: uma baseline de antes da queda (ou de
+        # um sensor/Arduino diferente) nao deve ser avaliada contra a
+        # primeira leitura pos-reconexao, e a UI nao deve continuar
+        # mostrando a ultima pressao conhecida como se fosse ao vivo
+        # enquanto o hardware esta desconectado.
+        grip_monitor.reset()
         msg = {
             "type": "HARDWARE_STATUS",
             "payload": {
