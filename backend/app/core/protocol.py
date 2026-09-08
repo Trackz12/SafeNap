@@ -16,6 +16,7 @@ class EventType(str, Enum):
     ALARM_ACKNOWLEDGED = "ALARM_ACKNOWLEDGED"
     HEARTBEAT = "HEARTBEAT"
     HARDWARE_STATUS = "HARDWARE_STATUS"
+    GRIP_STATUS = "GRIP_STATUS"  # backend -> frontend: estado do sensor FSR (empunhadura)
     ERROR = "ERROR"
 
     # --- Sincronização multi-dispositivo (detector -> backend -> viewers) ---

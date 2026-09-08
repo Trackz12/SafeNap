@@ -27,6 +27,8 @@ class SerialManager:
         self._auto_connect_enabled = False
         self._auto_connect_thread = None
         self.on_status_change_callback = None
+        # Chamado com (valor) a cada leitura valida do sensor FSR (empunhadura, A0).
+        self.on_fsr_reading_callback = None
         # --- health check ---
         self._ping_thread = None
         self._last_response_at: float | None = None
@@ -195,8 +197,30 @@ class SerialManager:
             self._last_response_at = time.time()
             if response == "OK:STATUS_ONLINE":
                 logger.debug("Health check: Arduino respondeu ao ping.")
+        elif response.startswith("FSR:"):
+            # Streaming periodico (~200ms) do sensor de pressao: tambem conta
+            # como sinal de vida (mais forte que o ping de STATUS a cada 10s).
+            self._last_response_at = time.time()
+            self._parse_fsr(response)
         elif response.startswith("ERR:"):
             logger.warning(f"Arduino reportou erro: {response}")
+
+    def _parse_fsr(self, line: str):
+        """Extrai a leitura analogica (pino A0) de uma linha `FSR:<valor>`
+        e repassa ao callback registrado (GripMonitor). Linha malformada e
+        ignorada com um aviso — nunca derruba a thread de leitura serial."""
+        payload = line[len("FSR:"):]
+        try:
+            value = float(payload)
+        except ValueError:
+            logger.warning(f"Linha FSR malformada ignorada: {line!r}")
+            return
+
+        if self.on_fsr_reading_callback:
+            try:
+                self.on_fsr_reading_callback(value)
+            except Exception as e:
+                logger.error(f"Erro no callback de leitura FSR: {e}")
 
     # ---------- health check ----------
 

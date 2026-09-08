@@ -9,6 +9,7 @@ import time
 from app.websocket.manager import ws_manager
 from app.serial.manager import serial_manager
 from app.safety.manager import safety_manager
+from app.safety.grip_monitor import grip_monitor
 from app.core.state_store import state_store
 from app.core.auth import require_rest_auth, check_ws_auth
 import json
@@ -39,6 +40,26 @@ async def lifespan(app: FastAPI):
             logger.error(f"Erro ao emitir HARDWARE_STATUS: {e}")
 
     serial_manager.on_status_change_callback = on_serial_status_change
+
+    # Callback executado em thread de background (leitura serial): repassa a
+    # leitura crua ao GripMonitor, que interpreta baseline/limiar/debounce, e
+    # emite GRIP_STATUS somente quando o estado do grip realmente muda.
+    def on_fsr_reading(pressure: float):
+        changed = grip_monitor.update(pressure)
+        if not changed:
+            return
+        msg = {
+            "type": "GRIP_STATUS",
+            "payload": grip_monitor.status(),
+        }
+        try:
+            asyncio.run_coroutine_threadsafe(
+                ws_manager.broadcast(json.dumps(msg)), loop
+            )
+        except Exception as e:
+            logger.error(f"Erro ao emitir GRIP_STATUS: {e}")
+
+    serial_manager.on_fsr_reading_callback = on_fsr_reading
 
     # Startup: ativa a sondagem automatica. Se o Arduino ja estiver plugado,
     # conecta na hora; caso contrario, tenta a cada 5s ate ser encontrado.
@@ -111,6 +132,7 @@ def get_status():
         "active_ws_connections": len(ws_manager.active_connections),
         "safety_state": safety_manager.current_state,
         "detector_session": state_store.get_detector(),
+        "grip": grip_monitor.status(),
     }
 
 CLIENT_ERRORS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "client_errors.log")
