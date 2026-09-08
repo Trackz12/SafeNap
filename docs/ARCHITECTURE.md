@@ -4,7 +4,9 @@
 O SAFENAP Web é dividido fisicamente e logicamente em duas grandes camadas para garantir segurança, isolamento e performance:
 
 1. **Frontend (Navegador):** Responsável por captura de imagem, processamento de rede neural via MediaPipe, extração de features para ML, classificação de sonolência (ONNX + modelo do usuário) e lógica de decisão.
-2. **Backend (Python local):** Responsável por gerenciar conexões seriais com o hardware (Arduino Nano) e servir como ponte de WebSocket para eventos oriundos do frontend.
+2. **Backend (Python local):** Responsável por gerenciar conexões seriais com o hardware (Arduino Nano), interpretar o sensor de pressão FSR-402 (`GripMonitor`) e servir como ponte de WebSocket para eventos oriundos do frontend.
+
+O sistema é híbrido por ter **duas fontes de sinal independentes fundidas em OR**: a visão computacional/ML no navegador (olhos, boca, cabeça) e o sensor de pressão na empunhadura do volante, interpretado no backend. Qualquer uma das duas pode disparar o alerta sozinha — nenhuma consegue apagar um alarme ativo da outra (ver `SafetyManager._vision_state` / `_grip_state` em `docs/DETECTION.md` e `docs/HARDWARE.md`).
 
 ## Diagrama de Blocos
 
@@ -19,24 +21,29 @@ graph TD
     end
 
     subgraph Backend [Backend (FastAPI)]
-        WS_S[WebSocketManager] -->|Parsing| SM[SafetyManager]
+        WS_S[WebSocketManager] -->|Eventos de visao| SM[SafetyManager]
+        GM[GripMonitor] -->|Sinal de garra OR| SM
         SM -->|Comandos Simples| Serial[SerialManager]
     end
 
     subgraph Hardware [Arduino Nano]
-        Serial -->|PySerial| MCU[Microcontrolador]
+        Serial -->|PySerial: comandos| MCU[Microcontrolador]
+        MCU -->|FSR:valor a cada 200ms| Serial
         MCU --> B[Buzzer]
-        MCU --> V[Vibration]
+        MCU --> V[4x Motor de Vibração]
         MCU --> L[LED]
+        FSR0[FSR-402] --> MCU
     end
 
+    Serial -->|leitura crua| GM
     WS -.->|JSON over WS| WS_S
 ```
 
 ## Benefícios
 - **Privacidade:** Nenhuma imagem da câmera sai do navegador do usuário.
 - **Performance:** As inferências da IA (FaceLandmarker + ONNX) rodam via WebAssembly/GPU diretamente na máquina do cliente.
-- **Desacoplamento:** O Arduino não sabe o que é "olho fechado", ele só sabe o que é "ALARM_ON". O backend não sabe o que é "câmera", ele apenas repassa estados.
+- **Desacoplamento:** O Arduino não sabe o que é "olho fechado" nem o que é "sonolência" — ele só sabe atuar (`ALARM_ON`) e ler tensão analógica (`FSR:`). O backend não sabe o que é "câmera", ele apenas repassa estados e interpreta o sinal de pressão.
+- **Robustez por redundância:** a fusão OR entre visão e garra cobre o caso em que uma modalidade falha (ex.: óculos escuros/baixa luz atrapalham o EAR, mas a mão sair do volante ainda é detectada; ou vice-versa).
 
 ## Pipeline de ML (100% no navegador)
 

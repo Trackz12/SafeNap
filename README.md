@@ -5,7 +5,7 @@ Sistema moderno de detecção de sonolência no navegador utilizando MediaPipe. 
 ## Estrutura
 - **Frontend**: React + Vite + TypeScript (Processamento da câmera e visão).
 - **Backend**: FastAPI + Python (Comunicação Serial).
-- **Arduino**: Código C++ para o Arduino Nano (Buzzer, Vibração, LED).
+- **Arduino**: Código C++ para o Arduino Nano (Buzzer, 4 motores de vibração, LED, leitura de 1 sensor FSR-402 na empunhadura do volante).
 
 ## Requisitos
 - Node.js (18+)

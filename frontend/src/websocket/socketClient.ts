@@ -12,6 +12,7 @@ export const EventType = {
     ALARM_ACKNOWLEDGED: "ALARM_ACKNOWLEDGED",
     HEARTBEAT: "HEARTBEAT",
     HARDWARE_STATUS: "HARDWARE_STATUS",
+    GRIP_STATUS: "GRIP_STATUS",
     ERROR: "ERROR",
     // Sincronização multi-dispositivo (detector -> backend -> viewers)
     DETECTOR_CLAIM: "DETECTOR_CLAIM",

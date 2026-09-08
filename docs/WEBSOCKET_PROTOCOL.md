@@ -58,6 +58,7 @@ Todas as mensagens enviadas pelo Frontend devem seguir o formato JSON abaixo:
 | Evento | Descrição |
 |--------|-----------|
 | `HARDWARE_STATUS` | Estado da conexão serial (`payload.connected`). |
+| `GRIP_STATUS` | Estado do sensor de pressão FSR-402 (empunhadura, um único sensor no pino A0), calculado pelo `GripMonitor`. Emitido somente quando o estado muda. Payload: `pressure` (leitura crua), `baseline`, `gripped` (bool), `state` (`NORMAL`\|`WARNING`\|`ALARM`), `calibrated` (bool — falso até acumular amostras suficientes de baseline). Essa fonte é fundida em OR com os eventos de visão/ML no `SafetyManager`: uma queda de pressão pode acionar `WARNING`/`ALARM` mesmo sem nenhum sinal vindo da câmera, e vice-versa — nenhuma das duas fontes consegue "apagar" um alerta ativo da outra. Diferente do firmware histórico, o alarme não tem corte automático por tempo. |
 | `STATE_SNAPSHOT` | Enviado imediatamente após um cliente conectar. Carrega o estado compartilhado completo (`payload.has_detector`, `payload.detector`, `payload.metrics`, `payload.session`, `payload.calibration`, `payload.user_model`). |
 | `ERROR` | Mensagem genérica de erro. |
 

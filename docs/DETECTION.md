@@ -2,6 +2,15 @@
 
 A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de vídeo sai do cliente). O MediaPipe FaceLandmarker extrai 478 pontos faciais; a partir deles são calculados, por frame, quatro sinais independentes que alimentam a máquina de estados.
 
+> **Segunda fonte de sinal (fora do navegador):** o sensor de pressão FSR-402
+> na empunhadura do volante é lido pelo Arduino e interpretado pelo
+> `GripMonitor` no backend (baseline adaptativa + histerese + debounce — ver
+> `docs/HARDWARE.md`). Esse sinal é fundido em **OR por severidade** com o
+> estado de visão/ML descrito abaixo dentro do `SafetyManager`: o estado
+> efetivo do hardware é sempre o mais grave entre os dois, e nenhuma fonte
+> consegue apagar um alarme ativo da outra (ver `docs/WEBSOCKET_PROTOCOL.md`,
+> evento `GRIP_STATUS`).
+
 ## Sinais por frame (`vision/frameAnalyzer.ts`)
 
 | Sinal | Cálculo | Uso |

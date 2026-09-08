@@ -12,8 +12,19 @@ logger = logging.getLogger(__name__)
 # renovando o watchdog enquanto a deteccao estiver viva.
 ALARM_HARDWARE_TIMEOUT_S = 15
 
+# Severidade para combinar as duas fontes de sinal (visao + garra) em OR:
+# o estado efetivo e sempre o mais severo entre as duas.
+_SEVERITY = {SafetyState.NORMAL: 0, SafetyState.WARNING: 1, SafetyState.ALARM: 2}
+
+
 class SafetyManager:
     def __init__(self):
+        # Duas fontes independentes de sinal, fundidas em OR (a mais severa
+        # vence). Fundir por "ultimo evento vence" quebraria a garantia de
+        # robustez: um DROWSINESS_WARNING_ENDED do frontend nao pode apagar
+        # um ALARM que veio da queda de pressao no volante, e vice-versa.
+        self._vision_state: SafetyState = SafetyState.NORMAL
+        self._grip_state: SafetyState = SafetyState.NORMAL
         self.current_state: SafetyState = SafetyState.NORMAL
         self._watchdog: threading.Timer | None = None
         self._lock = threading.Lock()
@@ -22,35 +33,58 @@ class SafetyManager:
         self._hardware_silenced = False
 
     def process_event(self, event: WebSocketMessage):
-        """Avalia um evento e determina se o estado de seguranca deve mudar."""
+        """Avalia um evento vindo do frontend (visao/ML) e atualiza a fonte
+        de sinal correspondente. Nao mexe no sinal de garra."""
         with self._lock:
-            previous_state = self.current_state
-
             if event.type == EventType.DROWSINESS_STARTED:
-                self.current_state = SafetyState.ALARM
+                self._vision_state = SafetyState.ALARM
 
             elif event.type == EventType.DROWSINESS_ENDED:
-                self.current_state = SafetyState.NORMAL
+                self._vision_state = SafetyState.NORMAL
 
             elif event.type == EventType.DROWSINESS_WARNING:
-                if self.current_state != SafetyState.ALARM:
-                    self.current_state = SafetyState.WARNING
+                if self._vision_state != SafetyState.ALARM:
+                    self._vision_state = SafetyState.WARNING
 
-            elif event.type in (EventType.DROWSINESS_WARNING_ENDED, EventType.ALARM_ACKNOWLEDGED):
-                self.current_state = SafetyState.NORMAL
+            elif event.type == EventType.DROWSINESS_WARNING_ENDED:
+                self._vision_state = SafetyState.NORMAL
 
-            new_alarm = self.current_state == SafetyState.ALARM
-            was_silenced_while_alarm = self._hardware_silenced and new_alarm
+            elif event.type == EventType.ALARM_ACKNOWLEDGED:
+                # Usuario confirmou que esta acordado/com as maos no volante:
+                # zera as duas fontes, nao so a de visao.
+                self._vision_state = SafetyState.NORMAL
+                self._grip_state = SafetyState.NORMAL
 
-            if self.current_state != previous_state or was_silenced_while_alarm:
-                self._hardware_silenced = False
-                self._apply_hardware_state()
+            self._recompute_state()
 
-            # Qualquer evento renovando o watchdog: a deteccao esta viva
-            if self.current_state in (SafetyState.ALARM, SafetyState.WARNING):
-                self._rearm_watchdog()
-            else:
-                self._cancel_watchdog()
+    def process_grip_signal(self, state: SafetyState):
+        """Atualiza a fonte de sinal do sensor de pressao FSR (GripMonitor).
+        Nao mexe no sinal de visao/ML."""
+        with self._lock:
+            self._grip_state = state
+            self._recompute_state()
+
+    def _recompute_state(self):
+        """Recalcula o estado efetivo (o mais severo entre visao e garra) e
+        reaplica o hardware/watchdog se necessario. Deve ser chamado sempre
+        dentro de self._lock."""
+        previous_state = self.current_state
+        self.current_state = max(
+            self._vision_state, self._grip_state, key=lambda s: _SEVERITY[s]
+        )
+
+        new_alarm = self.current_state == SafetyState.ALARM
+        was_silenced_while_alarm = self._hardware_silenced and new_alarm
+
+        if self.current_state != previous_state or was_silenced_while_alarm:
+            self._hardware_silenced = False
+            self._apply_hardware_state()
+
+        # Qualquer evento renovando o watchdog: a deteccao esta viva
+        if self.current_state in (SafetyState.ALARM, SafetyState.WARNING):
+            self._rearm_watchdog()
+        else:
+            self._cancel_watchdog()
 
     def on_all_clients_disconnected(self):
         """Se nenhum cliente estiver mais conectado, nao ha deteccao ativa:
@@ -58,6 +92,8 @@ class SafetyManager:
         with self._lock:
             logger.info("Todos os clientes desconectados: desligando hardware de alerta.")
             self._cancel_watchdog()
+            self._vision_state = SafetyState.NORMAL
+            self._grip_state = SafetyState.NORMAL
             self.current_state = SafetyState.NORMAL
             self._hardware_silenced = False
             serial_manager.send_command("ALARM_OFF")

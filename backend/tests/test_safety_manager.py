@@ -170,6 +170,62 @@ class TestWatchdog:
             assert manager._hardware_silenced is False
 
 
+class TestGripFusion:
+    """Fusao OR entre o sinal de visao (frontend) e o sinal de garra
+    (GripMonitor/FSR): o estado efetivo e sempre o mais severo dos dois,
+    e um evento de "fim" de uma fonte nao pode apagar um alarme ainda
+    ativo na outra fonte."""
+
+    def test_grip_alarm_alone_raises_current_state(self):
+        with patch("app.safety.manager.serial_manager") as mock_serial:
+            manager = SafetyManager()
+            manager.process_grip_signal(SafetyState.ALARM)
+            assert manager.current_state == SafetyState.ALARM
+            mock_serial.send_command.assert_any_call("ALARM_ON")
+
+    def test_vision_alarm_survives_grip_recovering(self):
+        """Regressao do bug identificado no plano: mao volta ao volante
+        (grip -> NORMAL) nao pode apagar um ALARM de sonolencia ocular
+        ainda ativo vindo da visao."""
+        with patch("app.safety.manager.serial_manager"):
+            manager = SafetyManager()
+            manager.process_event(make_event(EventType.DROWSINESS_STARTED))
+            manager.process_grip_signal(SafetyState.WARNING)
+            manager.process_grip_signal(SafetyState.NORMAL)
+            assert manager.current_state == SafetyState.ALARM
+
+    def test_grip_alarm_survives_vision_ending(self):
+        """Simetrico: olhos reabrem (visao -> NORMAL) nao apaga um ALARM
+        de queda de pressao no volante ainda ativo."""
+        with patch("app.safety.manager.serial_manager"):
+            manager = SafetyManager()
+            manager.process_grip_signal(SafetyState.ALARM)
+            manager.process_event(make_event(EventType.DROWSINESS_STARTED))
+            manager.process_event(make_event(EventType.DROWSINESS_ENDED))
+            assert manager.current_state == SafetyState.ALARM
+
+    def test_current_state_drops_only_when_both_sources_clear(self):
+        with patch("app.safety.manager.serial_manager"):
+            manager = SafetyManager()
+            manager.process_event(make_event(EventType.DROWSINESS_WARNING))
+            manager.process_grip_signal(SafetyState.WARNING)
+            manager.process_event(make_event(EventType.DROWSINESS_WARNING_ENDED))
+            assert manager.current_state == SafetyState.WARNING
+            manager.process_grip_signal(SafetyState.NORMAL)
+            assert manager.current_state == SafetyState.NORMAL
+
+    def test_alarm_acknowledged_clears_both_sources(self):
+        with patch("app.safety.manager.serial_manager"):
+            manager = SafetyManager()
+            manager.process_grip_signal(SafetyState.ALARM)
+            manager.process_event(make_event(EventType.DROWSINESS_STARTED))
+            manager.process_event(make_event(EventType.ALARM_ACKNOWLEDGED))
+            assert manager.current_state == SafetyState.NORMAL
+            # Uma nova leitura de garra "sem mudanca" (NORMAL) nao deve reacender nada
+            manager.process_grip_signal(SafetyState.NORMAL)
+            assert manager.current_state == SafetyState.NORMAL
+
+
 class TestHardwareTestCommands:
     def test_alarm_test(self):
         with patch("app.safety.manager.serial_manager") as mock_serial:

@@ -194,6 +194,47 @@ class TestReadThreadGuard:
             assert manager.autodetect_port() == "COM5"
 
 
+class TestFsrParsing:
+    """Streaming periodico do sensor de pressao FSR-402 (`FSR:<valor>`,
+    UM sensor no pino A0 — confirmado pelo firmware historico do TCC)."""
+
+    def test_valid_fsr_line_invokes_callback(self):
+        manager = SerialManager()
+        received = []
+        manager.on_fsr_reading_callback = lambda v: received.append(v)
+        manager._handle_response("FSR:512.0")
+        assert received == [512.0]
+
+    def test_malformed_fsr_line_does_not_crash_or_call_callback(self):
+        manager = SerialManager()
+        received = []
+        manager.on_fsr_reading_callback = lambda v: received.append(v)
+        manager._handle_response("FSR:garbage")
+        manager._handle_response("FSR:")
+        manager._handle_response("FSR:1.0,2.0")  # formato antigo (2 sensores) nao suportado
+        assert received == []
+
+    def test_fsr_line_without_callback_registered_does_not_crash(self):
+        manager = SerialManager()
+        manager._handle_response("FSR:512.0")  # nao deve lancar
+
+    def test_fsr_callback_exception_does_not_propagate(self):
+        manager = SerialManager()
+
+        def boom(v):
+            raise RuntimeError("modelo explodiu")
+
+        manager.on_fsr_reading_callback = boom
+        manager._handle_response("FSR:512.0")  # nao deve lancar
+
+    def test_fsr_response_renews_health(self):
+        manager = SerialManager()
+        old = time.time() - 60
+        manager._last_response_at = old
+        manager._handle_response("FSR:512.0")
+        assert manager._last_response_at > old
+
+
 class TestHealthCheck:
     """Ping periodico + deteccao de Arduino travado (conectado, sem resposta)."""
 
