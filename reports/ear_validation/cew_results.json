@@ -1,0 +1,34 @@
+{
+  "methodology": "MediaPipe FaceLandmarker (mesmo modelo .task do frontend, 478 landmarks) rodando via mediapipe.tasks.python (Python), EAR calculado com a mesma fórmula/índices de frontend/src/vision/frameAnalyzer.ts (distância 3D, 4 pares verticais por olho, combine_eyes para pose frontal). Dataset: CEW (Closed Eyes in the Wild, NUAA), variante 100x100, ground truth = pasta (ClosedFace/OpenFace). Imagens sem rosto detectado pelo MediaPipe são excluídas da matriz de confusão e reportadas separadamente (limitação do detector, não do EAR).",
+  "caveat": "Isto usa um limiar FIXO global para todos os sujeitos do dataset — mais pessimista que a produção real, que calibra o limiar por pessoa (fase aberta+fechada, ver docs/DETECTION.md). Um usuário real, calibrado individualmente, deve ter acurácia igual ou melhor que a reportada aqui.",
+  "dataset": "CEW (Closed Eyes in the Wild), NUAA — variante 100x100, não redistribuída neste repositório",
+  "total_images_closed_folder": 1193,
+  "total_images_open_folder": 1232,
+  "no_face_detected": {
+    "closed": 32,
+    "open": 4
+  },
+  "samples_used": 2387,
+  "results_by_threshold": {
+    "0.21": {
+      "tp": 1152,
+      "fp": 219,
+      "tn": 1008,
+      "fn": 8,
+      "precision": 0.8403,
+      "recall": 0.9931,
+      "f1": 0.9103,
+      "accuracy": 0.9049
+    },
+    "0.25": {
+      "tp": 1157,
+      "fp": 426,
+      "tn": 801,
+      "fn": 3,
+      "precision": 0.7309,
+      "recall": 0.9974,
+      "f1": 0.8436,
+      "accuracy": 0.8203
+    }
+  }
+}
