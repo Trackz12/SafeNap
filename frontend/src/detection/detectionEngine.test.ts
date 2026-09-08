@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DetectionEngine } from './detectionEngine';
 import { metricsStore } from './metricsStore';
 import { calibrationManager } from '../safety/calibrationManager';
+import { drowsinessModel } from '../ml/drowsinessModel';
 import type { FrameAnalysis } from '../vision/frameAnalyzer';
 
 /** Frame de teste: EAR alto (olhos abertos), boca fechada, cabeça neutra. */
@@ -223,5 +224,124 @@ describe('DetectionEngine — histerese de release do WARNING', () => {
         // 2. Volta ao normal: sem sinais, estado NORMAL persiste.
         for (let i = 0; i < 4; i++) engine.processFrame(makeFrame(0.35));
         expect(engine.getState()).toBe('NORMAL');
+    });
+});
+
+describe('DetectionEngine — score ML travado não trava o ALARM para sempre', () => {
+    let engine: DetectionEngine;
+    let t = 1_000_000;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault(); // threshold padrão 0.25
+        metricsStore.reset();
+        engine = new DetectionEngine();
+        t = 1_000_000;
+        vi.useFakeTimers();
+        vi.setSystemTime(t);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    /** Avança o relógio falso e processa um frame nesse instante. */
+    function tickFrame(ear: number, advanceMs: number): void {
+        t += advanceMs;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(ear));
+    }
+
+    function enterMicrosleepAlarm(): void {
+        // closeConfirmFrames=3 e microsleepAlarmMs=1800 no preset padrão;
+        // olhos bem fechados (EAR 0.05 < 0.25*0.55) sustentados por >1.8s.
+        for (let i = 0; i < 20; i++) tickFrame(0.05, 100);
+        expect(engine.getState()).toBe('ALARM');
+    }
+
+    it('regressão: sem o teto de staleness, um score ML travado bloquearia a liberação para sempre', () => {
+        enterMicrosleepAlarm();
+
+        // Score ML "travado" alto, com timestamp bem além do teto de
+        // tolerância durante ALARM (ML_STALE_DURING_ALARM_MS) — simula uma
+        // inferência que parou de rodar silenciosamente.
+        vi.spyOn(drowsinessModel, 'getLastScore').mockReturnValue({
+            score: 0.99,
+            at: t - 20_000,
+        });
+
+        // Olhos reabrem e ficam abertos — condição de liberação por regra
+        // (PERCLOS baixo, olhos não fechados). Sem o fix, mlRelease nunca
+        // vira true e o ALARM nunca sai daqui.
+        for (let i = 0; i < 10; i++) tickFrame(0.35, 100);
+
+        expect(engine.getState()).not.toBe('ALARM');
+    });
+
+    it('mantém o ALARM enquanto o score ML travado ainda está dentro do teto de tolerância', () => {
+        enterMicrosleepAlarm();
+
+        // "Travado" mas recente o bastante para ainda ser tolerado —
+        // preserva a histerese original (frame de inferência atrasado).
+        vi.spyOn(drowsinessModel, 'getLastScore').mockReturnValue({
+            score: 0.99,
+            at: t,
+        });
+
+        for (let i = 0; i < 5; i++) tickFrame(0.35, 100);
+
+        expect(engine.getState()).toBe('ALARM');
+    });
+});
+
+describe('DetectionEngine — processNoFace não deixa o rastreador de micro-sono vazar', () => {
+    let engine: DetectionEngine;
+    let t = 1_000_000;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault();
+        metricsStore.reset();
+        engine = new DetectionEngine();
+        t = 1_000_000;
+        vi.useFakeTimers();
+        vi.setSystemTime(t);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    it('regressão: um "since" de antes da perda de rosto não pode virar micro-sono no primeiro frame pós-reaquisição', () => {
+        // 3 frames de olhos bem fechados: streak de micro-sono chega a 3
+        // (closeConfirmFrames do preset padrão), mas a duração ainda é
+        // curta (300ms) — não dispara ALARM ainda.
+        for (let i = 0; i < 3; i++) {
+            t += 100;
+            vi.setSystemTime(t);
+            engine.processFrame(makeFrame(0.05));
+        }
+        expect(engine.getState()).not.toBe('ALARM');
+
+        // Rosto some por bem mais que o limiar de micro-sono (1.8s no
+        // preset padrão).
+        t += 5000;
+        vi.setSystemTime(t);
+        engine.processNoFace();
+
+        // Rosto reaparece com 1 único frame de EAR baixo (ruído comum de
+        // reaquisição do tracking). Sem o reset em processNoFace(), o
+        // "since" antigo faria a duração parecer >5s e disparar MICROSLEEP
+        // com esse frame isolado.
+        t += 100;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(0.05));
+
+        expect(engine.getState()).not.toBe('ALARM');
     });
 });

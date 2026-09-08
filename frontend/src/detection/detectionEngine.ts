@@ -6,7 +6,7 @@ import type { FrameAnalysis } from '../vision/frameAnalyzer';
 import { featureExtractor, type FeatureVector } from './featureExtractor';
 import { drowsinessModel } from '../ml/drowsinessModel';
 import { mlDataCollector } from '../ml/mlDataCollector';
-import { ML_STALE_MS, ML_RELEASE_THRESHOLD } from '../ml/thresholds';
+import { ML_STALE_MS, ML_STALE_DURING_ALARM_MS, ML_RELEASE_THRESHOLD } from '../ml/thresholds';
 import { combineWarningReason, combineAlarmReason, type DetectionMode } from '../ml/mlReasons';
 import { fuseSignals, isWarning, isAlarm } from './signalFusion';
 
@@ -168,7 +168,7 @@ export const DEFAULT_METRICS: DetectionMetrics = {
     yawnActive: false,
     noseDropRatio: 0,
     headDropped: false,
-    threshold: 0.25, // fallback; serÃ¡ atualizado por publishLastFrame via calibrationManager.getThreshold()
+    threshold: 0.25, // fallback; será atualizado por publishLastFrame via calibrationManager.getThreshold()
     preset: 'standard',
     mlScore: null,
 };
@@ -179,7 +179,7 @@ interface ClosedSegment {
 }
 
 // Janela do filtro de mediana aplicado ao EAR (em frames). 3 elimina picos
-// isolados de jitter mantendo resposta rÃ¡pida a fechamento real (~200ms).
+// isolados de jitter mantendo resposta rápida a fechamento real (~200ms).
 const EAR_SMOOTHING_WINDOW = 3;
 
 export class DetectionEngine {
@@ -205,7 +205,7 @@ export class DetectionEngine {
     private headDropped = false;
 
     // Filtro de mediana (janela 3) no EAR: mata picos de jitter isolados do
-    // MediaPipe sem o atraso mÃ©dio de um EMA. Soma-se Ã  confirmaÃ§Ã£o por N
+    // MediaPipe sem o atraso médio de um EMA. Soma-se à confirmação por N
     // frames abaixo do threshold para eliminar falsos positivos de 1 frame.
     private earBuffer: number[] = [];
     private belowThresholdStreak = 0;
@@ -216,7 +216,7 @@ export class DetectionEngine {
     private lastMicrosleepAt = -Infinity;
     private microsleepStreak = 0;
 
-    // TendÃªncia de sonolÃªncia: EAR declinante ao longo do tempo (sÃ³ olhos abertos).
+    // Tendência de sonolência: EAR declinante ao longo do tempo (só olhos abertos).
     private longEarBuffer: Array<{ t: number; e: number }> = [];
 
     // SEP: timestamps de piscadas lentas (400ms-microsleep) - marcador precoce.
@@ -236,7 +236,7 @@ export class DetectionEngine {
         }
     }
 
-    /** Mediana da janela dos Ãºltimos N EAR â€” remove picos de jitter. */
+    /** Mediana da janela dos últimos N EAR — remove picos de jitter. */
     private smoothEar(raw: number): number {
         this.earBuffer.push(raw);
         if (this.earBuffer.length > EAR_SMOOTHING_WINDOW) {
@@ -311,15 +311,15 @@ export class DetectionEngine {
     }
 
     /**
-     * Re-sincroniza o estado de alarme com o backend quando a conexÃ£o
-     * WebSocket Ã© restabelecida. Ã‰ a Ãºnica forma de re-armar o hardware
-     * (buzzer/vibraÃ§Ã£o) apÃ³s uma queda de rede que disparou o watchdog.
+     * Re-sincroniza o estado de alarme com o backend quando a conexão
+     * WebSocket é restabelecida. É a única forma de re-armar o hardware
+     * (buzzer/vibração) após uma queda de rede que disparou o watchdog.
      */
     public initReconnectSync(): void {
         wsClient.onReconnect(() => {
             if (this.state === 'ALARM') {
                 const now = Date.now();
-                this.lastHeartbeatAt = 0; // forÃ§a prÃ³ximo heartbeat imediato
+                this.lastHeartbeatAt = 0; // força próximo heartbeat imediato
                 this.heartbeatIfAlarm(now);
                 wsClient.sendEvent(EventType.DROWSINESS_STARTED, {
                     reason: this.reason,
@@ -366,6 +366,14 @@ export class DetectionEngine {
         this.belowThresholdStreak = 0;
         this.closedCandidateSince = null;
         this.earBuffer = [];
+        // Sem isso, um "since" de antes da perda de rosto sobrevive ao
+        // gap: o primeiro frame de EAR baixo após a reaquisição (comum
+        // como ruído de tracking) computaria a duração do micro-sono
+        // incluindo todo o tempo em que o rosto esteve ausente, podendo
+        // disparar MICROSLEEP falso instantaneamente. reset() (engine
+        // completo) já limpava isso — processNoFace() não limpava.
+        this.microsleepCandidateSince = null;
+        this.microsleepStreak = 0;
         this.lastFeatureVector = null;
         featureExtractor.reset();
         drowsinessModel.reset();
@@ -415,8 +423,8 @@ export class DetectionEngine {
 
         const threshold = calibrationManager.getThreshold();
 
-        // ConfirmaÃ§Ã£o por N frames consecutivos abaixo do threshold:
-        // um frame ruidoso isolado nÃ£o dispara mais "olhos fechados".
+        // Confirmação por N frames consecutivos abaixo do threshold:
+        // um frame ruidoso isolado não dispara mais "olhos fechados".
         const below = ear < threshold;
         if (below) {
             if (this.closedCandidateSince === null) this.closedCandidateSince = now;
@@ -475,8 +483,8 @@ export class DetectionEngine {
             this.microsleepStreak = 0;
         }
 
-        // TendÃªncia de sonolÃªncia: coleta EAR apenas com olhos abertos, para
-        // que picos de blink/oclusÃ£o nÃ£o contaminem o declÃ­nio progressivo.
+        // Tendência de sonolência: coleta EAR apenas com olhos abertos, para
+        // que picos de blink/oclusão não contaminem o declínio progressivo.
         // Usa o EAR suavizado (mediana-3), não o cru: um frame de jitter
         // não pode simular queda de pálpebra.
         if (!this.eyesClosed) {
@@ -534,7 +542,7 @@ export class DetectionEngine {
 
     private perclosAt(now: number): number {
         const windowStart = now - this.config.perclosWindowMs;
-        // Ignora segmentos curtos (duraÃ§Ã£o de piscada normal) â€” sÃ³ episÃ³dios
+        // Ignora segmentos curtos (duração de piscada normal) — só episódios
         // sustentados de olhos fechados devem inflar o PERCLOS.
         this.segments = this.segments.filter(
             (s) => s.end > windowStart && s.end - s.start >= this.config.perclosIgnoreMs
@@ -599,12 +607,18 @@ export class DetectionEngine {
     private evaluate(now: number, closedForMs: number, faceLostForMs: number): void {
         const perclos = this.perclosAt(now);
 
-        // ML score: manter se fresco. Em ALARM, manter o Ãºltimo score (mesmo
-        // levemente stale) para permitir hysteresis â€” evita flapping e falso
-        // negativo durante travadas de CPU que atrasam a inferÃªncia.
+        // ML score: manter se fresco. Em ALARM, tolera um score mais velho
+        // (até ML_STALE_DURING_ALARM_MS) para a histerese sobreviver a um
+        // frame de inferência atrasado — mas NUNCA por tempo indefinido:
+        // sem esse teto, uma inferência que trava silenciosamente (erro na
+        // promise do ONNX, aba em segundo plano) deixaria o score alto
+        // congelado para sempre, e o alarme nunca liberaria sozinho mesmo
+        // com os olhos abertos e PERCLOS baixo (ver mlRelease abaixo).
         const mlResult = drowsinessModel.getLastScore();
-        const mlFresh = mlResult.at !== null && (now - mlResult.at) <= ML_STALE_MS;
-        this.lastMlScore = (mlFresh || this.state === 'ALARM') ? mlResult.score : null;
+        const staleness = mlResult.at !== null ? now - mlResult.at : Infinity;
+        const mlFresh = staleness <= ML_STALE_MS;
+        const mlToleratedDuringAlarm = this.state === 'ALARM' && staleness <= ML_STALE_DURING_ALARM_MS;
+        this.lastMlScore = (mlFresh || mlToleratedDuringAlarm) ? mlResult.score : null;
 
         // Microsleep: fechamento agudo sustentado (bem fechado, indep. de PERCLOS).
         const microDuration = this.microsleepCandidateSince !== null
@@ -612,7 +626,7 @@ export class DetectionEngine {
             : 0;
         const inMicrosleepCooldown = now - this.lastMicrosleepAt < this.config.microsleepCooldownMs;
 
-        // TendÃªncia de sonolÃªncia: fraÃ§Ã£o de declÃ­nio do EAR (olhos abertos) vs baseline.
+        // Tendência de sonolência: fração de declínio do EAR (olhos abertos) vs baseline.
         const trendFraction = this.computeEarTrendFraction();
 
         // SEP: taxa de piscadas lentas nos últimos 60s. >=3 lentas/min é
@@ -626,18 +640,18 @@ export class DetectionEngine {
         else if (this.headDropped) ruleWarn = 'HEAD_DROP';
         else if (this.faceLostReported || faceLostForMs >= this.config.faceLostWarnMs) ruleWarn = 'FACE_LOST';
         else if (closedForMs >= this.config.warnCloseMs) ruleWarn = 'PROLONGED_CLOSE';
-        // EAR declinante (fase prodrÃ´mica) â€” sÃ³ alerta se nÃ£o houver outra causa concreta.
+        // EAR declinante (fase prodrômica) — só alerta se não houver outra causa concreta.
         else if (trendFraction !== null && trendFraction >= this.config.earTrendWarnFraction) ruleWarn = 'EAR_TREND';
         // Piscadas lentas frequentes: sinal fisiológico precoce independente.
         else if (slowBlinksActive) ruleWarn = 'SLOW_BLINKS';
 
         let ruleAlarm: AlarmReason | null = null;
-        // Microsleep dedicado tem prioridade: Ã© o sinal mais crÃ­tico (fechamento agudo).
+        // Microsleep dedicado tem prioridade: é o sinal mais crítico (fechamento agudo).
         if (microDuration >= this.config.microsleepAlarmMs) ruleAlarm = 'MICROSLEEP';
         else if (closedForMs >= this.config.drowsinessThresholdMs) ruleAlarm = 'EYES_CLOSED_DURATION';
         else if (perclos >= this.config.perclosAlarmLevel) ruleAlarm = 'PERCLOS_CRITICAL';
 
-        // Alarme de microsleep respeita o cooldown para nÃ£o re-alarmar na mesma sonolÃªncia.
+        // Alarme de microsleep respeita o cooldown para não re-alarmar na mesma sonolência.
         const microsleepTriggered = this.microsleepStreak >= this.config.closeConfirmFrames &&
             ruleAlarm === 'MICROSLEEP' &&
             !inMicrosleepCooldown;
@@ -700,9 +714,9 @@ export class DetectionEngine {
         }
 
         if (this.state === 'ALARM') {
-            // Hysteresis de release do ML: em modos que usam ML, sÃ³ libera o
+            // Hysteresis de release do ML: em modos que usam ML, só libera o
             // alarme quando o score ML cai claramente abaixo de ML_RELEASE_THRESHOLD,
-            // nÃ£o apenas abaixo do threshold de alarme (evita flapping no 0.95).
+            // não apenas abaixo do threshold de alarme (evita flapping no 0.95).
             const mlRelease = this.detectionMode !== 'rules'
                 ? (this.lastMlScore === null || this.lastMlScore < ML_RELEASE_THRESHOLD)
                 : true;
@@ -782,9 +796,9 @@ export class DetectionEngine {
     }
 
     /**
-     * FraÃ§Ã£o de declÃ­nio do EAR recente versus baseline calibrado (sÃ³ olhos
-     * abertos). Retorna null se nÃ£o houver dados suficientes ou baseline.
-     * DetÃ©m a fase prodrÃ´mica da sonolÃªncia (pÃ¡lpebra caindo gradualmente).
+     * Fração de declínio do EAR recente versus baseline calibrado (só olhos
+     * abertos). Retorna null se não houver dados suficientes ou baseline.
+     * Detém a fase prodrômica da sonolência (pálpebra caindo gradualmente).
      */
 /**
      * Taxa de piscadas LENTAS por minuto (janela 60s). Piscada lenta =
