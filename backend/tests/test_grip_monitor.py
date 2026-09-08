@@ -177,3 +177,91 @@ class TestSafetyManagerIntegration:
             changed = monitor.update(BASELINE_PRESSURE)
         assert changed is False
         mock_safety.process_grip_signal.assert_not_called()
+
+    def test_renews_signal_during_sustained_alarm(self):
+        """Regressao: sem isso, o watchdog do SafetyManager (15s sem sinal)
+        desligaria sozinho um alarme de garra sustentado -- exatamente o
+        corte automatico que o GripMonitor foi desenhado para NAO
+        reproduzir (ver docstring do modulo). O lado da visao ja resolve
+        isso com HEARTBEAT a cada 3s durante ALARM; a garra precisa do
+        mesmo tipo de renovacao."""
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager") as mock_safety:
+            calibrate(monitor, clock)
+            monitor.update(DROPPED_PRESSURE)
+            clock.advance(1.1)
+            monitor.update(DROPPED_PRESSURE)  # transiciona para ALARM
+            mock_safety.reset_mock()
+
+            # Estado nao muda mais (continua ALARM), mas o sinal deve ser
+            # renovado a cada leitura para manter o watchdog vivo.
+            clock.advance(5.0)
+            monitor.update(DROPPED_PRESSURE)
+            clock.advance(5.0)
+            monitor.update(DROPPED_PRESSURE)
+
+        assert mock_safety.process_grip_signal.call_count == 2
+        mock_safety.process_grip_signal.assert_called_with(SafetyState.ALARM)
+
+    def test_does_not_spam_signal_while_steady_normal(self):
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager") as mock_safety:
+            calibrate(monitor, clock)
+            mock_safety.reset_mock()
+            monitor.update(BASELINE_PRESSURE)
+            monitor.update(BASELINE_PRESSURE)
+        mock_safety.process_grip_signal.assert_not_called()
+
+
+class TestReset:
+    def test_reset_clears_calibration(self):
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager"):
+            calibrate(monitor, clock)
+            assert monitor.status()["calibrated"] is True
+            monitor.reset()
+        status = monitor.status()
+        assert status["calibrated"] is False
+        assert status["baseline"] is None
+        assert status["gripped"] is True
+        assert status["state"] == SafetyState.NORMAL
+
+    def test_reset_after_disconnect_does_not_evaluate_against_stale_baseline(self):
+        """Regressao: sem reset, uma baseline de antes de uma queda de
+        conexao (ou de um Arduino/sensor diferente) seria avaliada
+        imediatamente contra a primeira leitura pos-reconexao, pulando a
+        fase de calibracao e podendo gerar alarme falso."""
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager"):
+            calibrate(monitor, clock)
+            monitor.reset()
+            # Primeira leitura pos-reset: mesmo que "baixa", nao deve
+            # avaliar nada -- ainda esta recalibrando.
+            changed = monitor.update(DROPPED_PRESSURE)
+        assert changed is False
+        assert monitor.status()["calibrated"] is False
+
+    def test_reset_notifies_safety_manager_when_was_active(self):
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager") as mock_safety:
+            calibrate(monitor, clock)
+            monitor.update(DROPPED_PRESSURE)
+            clock.advance(1.1)
+            monitor.update(DROPPED_PRESSURE)  # ALARM
+            mock_safety.reset_mock()
+            monitor.reset()
+        mock_safety.process_grip_signal.assert_called_once_with(SafetyState.NORMAL)
+
+    def test_reset_when_already_normal_does_not_notify(self):
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager") as mock_safety:
+            calibrate(monitor, clock)
+            mock_safety.reset_mock()
+            monitor.reset()
+        mock_safety.process_grip_signal.assert_not_called()
