@@ -1,0 +1,12 @@
+{
+  "methodology": "Backend real (uvicorn, processo separado, porta 8123), cliente websockets.connect() em loopback (127.0.0.1). Medido: DETECTOR_CLAIM enviado -> DETECTOR_ASSIGNED recebido (unico evento com resposta direta; SAFETY_EVENTS nao tem ACK por design). N=200 apos 10 de warmup. NAO inclui hardware fisico nem rede real de veiculo (Tailscale/Wi-Fi) -- e loopback local.",
+  "ws_claim_roundtrip": {
+    "n": 200,
+    "mean_ms": 0.085,
+    "median_ms": 0.085,
+    "p95_ms": 0.091,
+    "p99_ms": 0.105,
+    "min_ms": 0.077,
+    "max_ms": 0.156
+  }
+}

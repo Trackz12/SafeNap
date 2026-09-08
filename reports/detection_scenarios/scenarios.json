@@ -1,0 +1,137 @@
+{
+  "methodology": "Cenários sintéticos executados contra o DetectionEngine real (não uma reimplementação), com relógio controlado (vi.setSystemTime) para atingir durações exatas. Verdade-fundamental atribuída pelos autores com base nos limiares documentados em docs/DETECTION.md — isto é verificação de especificação, não validação com dados humanos reais.",
+  "totalScenarios": 15,
+  "correct": 15,
+  "accuracy": 1,
+  "confusionMatrixBinary": {
+    "tp": 7,
+    "fp": 0,
+    "tn": 8,
+    "fn": 0,
+    "precision": 1,
+    "recall": 1,
+    "f1": 1
+  },
+  "scenarios": [
+    {
+      "name": "blink_curto_60ms",
+      "description": "Piscada de ~60ms (limite inferior da faixa normal 50-400ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "blink_tipico_200ms",
+      "description": "Piscada típica de ~200ms",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "blink_limite_390ms",
+      "description": "Piscada de ~390ms (limite superior da faixa normal, maxBlinkMs=400)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "fechamento_abaixo_aviso_600ms",
+      "description": "Olhos fechados por 600ms (< warnCloseMs=700ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "fechamento_prolongado_900ms",
+      "description": "Olhos fechados por 900ms (> warnCloseMs=700ms)",
+      "groundTruth": "WARNING",
+      "predicted": "WARNING",
+      "predictedReason": "PROLONGED_CLOSE",
+      "correct": true
+    },
+    {
+      "name": "fechamento_critico_1700ms",
+      "description": "Olhos fechados por 1700ms (> drowsinessThresholdMs=1500ms)",
+      "groundTruth": "ALARM",
+      "predicted": "ALARM",
+      "predictedReason": "EYES_CLOSED_DURATION",
+      "correct": true
+    },
+    {
+      "name": "microsleep_agudo_2000ms",
+      "description": "EAR muito baixo (nível micro-sono) sustentado por 2000ms",
+      "groundTruth": "ALARM",
+      "predicted": "ALARM",
+      "predictedReason": "MICROSLEEP",
+      "correct": true
+    },
+    {
+      "name": "recuperacao_apos_alarme",
+      "description": "Reabertura sustentada dos olhos após ALARM (EYES_CLOSED_DURATION)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "bocejo_confirmado_500ms",
+      "description": "Boca aberta (aspect 0.75) sustentada por 500ms",
+      "groundTruth": "WARNING",
+      "predicted": "WARNING",
+      "predictedReason": "YAWN",
+      "correct": true
+    },
+    {
+      "name": "bocejo_nao_confirmado_200ms",
+      "description": "Boca aberta por apenas 200ms (< yawnMinMs=400ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "queda_cabeca_confirmada_2500ms",
+      "description": "Nariz abaixo do baseline+margem sustentado por 2500ms",
+      "groundTruth": "WARNING",
+      "predicted": "WARNING",
+      "predictedReason": "HEAD_DROP",
+      "correct": true
+    },
+    {
+      "name": "queda_cabeca_curta_1000ms",
+      "description": "Queda de cabeça por apenas 1000ms (< headDropMinMs=2000ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "rosto_ausente_confirmado_6000ms",
+      "description": "Rosto ausente por 6000ms",
+      "groundTruth": "WARNING",
+      "predicted": "WARNING",
+      "predictedReason": "FACE_LOST",
+      "correct": true
+    },
+    {
+      "name": "rosto_ausente_curto_2000ms",
+      "description": "Rosto ausente por apenas 2000ms (< faceLostWarnMs=5000ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "tendencia_declinio_gradual",
+      "description": "EAR=0.25 sustentado (declínio de 28,6% vs. baseline 0.35), olhos nunca fecham",
+      "groundTruth": "WARNING",
+      "predicted": "WARNING",
+      "predictedReason": "EAR_TREND",
+      "correct": true
+    }
+  ]
+}
