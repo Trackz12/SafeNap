@@ -1,0 +1,93 @@
+{
+  "methodology": "Cenarios sinteticos executados contra o SafetyManager real, combinando eventos de visao (self-declared pelo frontend) e sinais de garra (GripMonitor) para verificar especificamente a garantia central da fusao OR por severidade: nenhuma fonte consegue suprimir um alarme ativo originado pela outra. Verificacao de especificacao, nao validacao com condutores reais em condicao dinamica de direcao.",
+  "total_scenarios": 11,
+  "correct": 11,
+  "confusion_matrix_binary": {
+    "tp": 7,
+    "fp": 0,
+    "tn": 4,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "scenarios": [
+    {
+      "name": "ambos_normais",
+      "description": "Nenhuma fonte ativa",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "apenas_visao_alarme",
+      "description": "Só a visão dispara ALARM",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "apenas_garra_alarme",
+      "description": "Só a garra (FSR) dispara ALARM",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "apenas_visao_aviso",
+      "description": "Só a visão dispara WARNING",
+      "ground_truth": "WARNING",
+      "predicted": "WARNING",
+      "correct": true
+    },
+    {
+      "name": "apenas_garra_aviso",
+      "description": "Só a garra dispara WARNING",
+      "ground_truth": "WARNING",
+      "predicted": "WARNING",
+      "correct": true
+    },
+    {
+      "name": "visao_alarme_domina",
+      "description": "Visão ALARM + garra WARNING -> ALARM (mais severo vence)",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "visao_sobrevive_garra_normaliza",
+      "description": "Garra normaliza mas visão ALARM persiste",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "garra_sobrevive_visao_termina",
+      "description": "Visão termina mas garra ALARM persiste",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "ack_zera_ambas",
+      "description": "ALARM_ACKNOWLEDGED zera visão e garra juntas",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "cai_so_com_ambas_liberadas",
+      "description": "Estado só cai a NORMAL quando ambas as fontes liberam",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "desconexao_total",
+      "description": "Última desconexão zera as duas fontes (fail-safe)",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    }
+  ]
+}
