@@ -39,6 +39,25 @@ de engenharia), **não** que os limiares escolhidos correspondem à sonolência
 real de uma pessoa (validação empírica) — essa segunda parte segue como
 trabalho futuro.
 
+## `grip_scenarios/` e `fusion_scenarios/` — FSR isolado e sistema integrado
+
+Mesmo princípio da bateria de visão, mas separando os três alvos que o
+parecer do orientador pediu explicitamente para não misturar:
+
+| Pasta | O que testa | Resultado |
+|---|---|---|
+| `grip_scenarios/` | `GripMonitor` isolado (FSR) — 10 cenários (queda breve vs. sustentada, histerese, deriva de baseline, sem corte automático) | precisão/recall/F1 = 1,000 |
+| `fusion_scenarios/` | `SafetyManager` — sistema integrado (visão + FSR fundidos em OR), 11 cenários focados na garantia de que nenhuma fonte apaga o alarme da outra | precisão/recall/F1 = 1,000 |
+
+Reproduza com `cd backend && python -m pytest tests/test_grip_monitor_scenarios.py tests/test_safety_manager_scenarios.py -v`.
+
+**Mesma ressalva da bateria de visão**: isso é verificação de especificação
+(o código faz o que os limiares documentados dizem que ele deve fazer), não
+validação com dados humanos reais. Diferente da visão (onde existe o CEW),
+**não há dataset público de pressão de empunhadura veicular rotulado** —
+essa lacuna específica do FSR só se fecha com validação de campo (bancada
+física ou condutores reais), que continua como trabalho futuro.
+
 ## `ear_validation/` — EAR contra dados humanos reais (CEW) ✅ concluído
 
 A lacuna do item anterior foi fechada: validamos a classificação olho-
