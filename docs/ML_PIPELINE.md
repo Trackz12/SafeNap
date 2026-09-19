@@ -21,9 +21,9 @@ Por isso, desde esta revisão, o ML é um sinal **auxiliar**: pode gerar `WARNIN
 | Status | O que |
 |---|---|
 | **IMPLEMENTADO** | Inferência ONNX local (`onnxruntime-web`, WASM) · extração de 18 features · modelo do usuário (RF em JS, localStorage) · `extract_features.py` (FaceLandmarker, manifesto, split por sujeito) · `train_model.py` (4 candidatos, GroupKFold, ONNX + model card) · `evaluate.py` · métricas completas |
-| **VALIDADO** (por teste automatizado — engenharia, não desempenho) | Ordem/schema das 18 features (Python ↔ TS) · geometria, janela, PERCLOS e piscadas idênticos Python ↔ TS (tolerância 1e-9) · contrato de I/O do ONNX com ORT Python **e** ORT-web reais · P(DROWSY) do ORT-web = ORT Python em 43 vetores · pipeline de treino reproduzível (mesma seed → mesmo `.onnx`, byte a byte) · política ML × regras · DetectionEngine em 15 cenários sintéticos (verificação de especificação) · EAR open/closed no CEW (2 387 imagens; ≠ sonolência) |
+| **VALIDADO** (por teste automatizado — engenharia, não desempenho) | Ordem/schema das 18 features (Python ↔ TS) · geometria, janela, PERCLOS e piscadas idênticos Python ↔ TS (tolerância 1e-9) · contrato de I/O do ONNX com ORT Python **e** ORT-web reais · P(DROWSY) do ORT-web = ORT Python em 43 vetores (Node) e em 12 vetores no Chromium (diferença 0) · pipeline de treino reproduzível (mesma seed → mesmo `.onnx`, byte a byte) · política ML × regras · DetectionEngine em 15 cenários sintéticos (verificação de especificação) · EAR open/closed no CEW (2 387 imagens; ≠ sonolência) |
 | **EXPERIMENTAL** | O ONNX de sonolência embarcado (só dados sintéticos) · o modelo do usuário (destilado do ONNX sintético, sem holdout) · limiares ML 0,85/0,95/0,70 · pesos da fusão multi-sinal |
-| **NÃO VALIDADO** | Eficácia em motoristas reais ou em direção real · desempenho em NTHU-DDD / UTA-RLDD (não disponíveis aqui) · redução de acidentes · desempenho clínico · FPS/latência/CPU/memória do MediaPipe em navegadores reais · `onnxruntime-web` **em navegador** (só foi exercitado em Node) |
+| **NÃO VALIDADO** | Eficácia em motoristas reais ou em direção real · desempenho em NTHU-DDD / UTA-RLDD (não disponíveis aqui) · redução de acidentes · desempenho clínico · FPS/latência/CPU/memória do MediaPipe em navegadores reais · o app completo com câmera em navegador real (o ORT-web foi verificado em Chromium, ver §9) |
 
 ## 2. Pipeline real (o que o código executa)
 
@@ -149,7 +149,9 @@ Achados verificados:
 - Carregamento lazy; um `run()` em voo por vez; **descarte de resultados antigos** (troca de
   geração no `reset()`/timeout); timeout de 2 s; 3 falhas seguidas → status `error` (UI); NaN nunca
   vira score; validação de I/O no warmup; **sem fallback de modelo por CDN de terceiros**; WASM
-  alinhado à versão instalada do pacote (`ort.env.versions.web`).
+  **servido do mesmo origin**: `?url` do Vite sobre o pacote instalado (versão sempre igual ao JS; sem
+  CDN, offline) e entry `onnxruntime-web/wasm` (o bundle padrão pedia a variante WebGPU/jsep, achado do
+  teste em navegador real).
 - Throttle de 200 ms **mantido**: o custo por inferência medido é ≪ 1 ms (abaixo) e a janela de
   features só muda a ~10 Hz; diminuir o intervalo não traz informação nova. O limite real é o
   `ML_STALE_MS` (1,5 s).
@@ -177,7 +179,8 @@ recalibrar após 6 h; "pular" usa limiar 0,25.
 | Item | Resultado |
 |---|---|
 | Inferência ORT-web (WASM) do modelo embarcado, **em Node 26.4 nesta máquina**, n=1000, 18 features | p50 0,041 ms · p95 0,069 ms · p99 0,264 ms · máx 2,1 ms |
-| MediaPipe FPS / latência, extração de features, CPU, memória, ORT-web **no navegador** | **Não medido.** O loop é `setTimeout(100 ms)` ⇒ teto de ~10 FPS por construção; o FPS real depende do `detectForVideo`. |
+| ORT-web **no Chromium** (Playwright, servidor de dev, WASM local, sem requisição externa do ORT): status `ready`, score = ORT Python (diferença 0) em 12 vetores; latência p50 ≈ 4,9 ms **incluindo** o polling de 1 ms do harness (limite superior, não custo real) |
+| MediaPipe FPS / latência, extração de features, CPU, memória | **Não medido.** O loop é `setTimeout(100 ms)` ⇒ teto de ~10 FPS por construção; o FPS real depende do `detectForVideo`. |
 | Regras de detecção | `reports/latency/frontend_processing.json` (não inclui ORT nem MediaPipe) |
 
 Nenhuma otimização foi feita; o comportamento funcional foi preservado.
@@ -218,13 +221,10 @@ repositório (licença/aprovação), o manifesto de rótulos depende da decisão
   calibração ensina "olho fechado = sonolento". Prioridade sobre o ONNX **mantida** (decisão de
   produto pendente). A política do §7 vale para o score de ambos.
 - Pesos da fusão multi-sinal e rampas 0,7–0,95 não têm justificativa empírica.
-- O WASM do `onnxruntime-web` ainda vem do CDN jsDelivr (versão agora alinhada); auto-hospedar seria
-  mais robusto para uso offline no veículo.
 - `download_datasets.py` não baixa nada automaticamente (IDs `FILL_ME`).
 - **Integridade do ONNX em runtime:** o hash do model card só é conferido em testes; o navegador
   não verifica o sha256 antes de `InferenceSession.create`.
-- **WASM de terceiros sem SRI/CSP:** o WASM do ORT vem do jsDelivr; sem integridade nem CSP.
-  Auto-hospedar (`node_modules/onnxruntime-web/dist`) resolve esta e a dependência de rede.
+- Sem CSP no app (o WASM do ORT já é do mesmo origin; as fontes do Google no CSS ainda são de terceiros).
 - Um `run()` do ORT que trava desativa o ONNX na sessão (mantém `inFlight`, sem `run()` concorrente)
   e o status vira `error`; não há recriação automática da sessão. O warmup não tem timeout.
 - ONNX e modelo do usuário compartilham o buffer de suavização (autocorrige em 3 amostras).

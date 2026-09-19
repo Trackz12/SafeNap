@@ -17,7 +17,7 @@ const h = vi.hoisted(() => ({
     create: vi.fn(),
     env: { wasm: {} as Record<string, unknown>, versions: { web: '9.9.9' } },
 }));
-vi.mock('onnxruntime-web', () => {
+vi.mock('onnxruntime-web/wasm', () => {
     class Tensor {
         type: string;
         data: Float32Array;
@@ -102,11 +102,12 @@ describe('DrowsinessModel (inferência ONNX)', () => {
     }
 
     describe('carregamento', () => {
-        it('inicializa, valida a saída no warmup e fica ready; alinha o WASM à versão instalada', async () => {
+        it('inicializa, valida a saída no warmup e fica ready; serve o WASM do mesmo origin', async () => {
             await ready();
             expect(model.isReady()).toBe(true);
             expect(modelStatusStore.getStatus()).toBe('ready');
-            expect(String(h.env.wasm.wasmPaths)).toContain('onnxruntime-web@9.9.9');
+            expect(JSON.stringify(h.env.wasm.wasmPaths)).not.toContain('http'); // mesmo origin, nunca CDN
+            expect(h.env.wasm.wasmPaths).toEqual({ mjs: expect.any(String), wasm: expect.any(String) });
         });
 
         it('modelo local ausente → status error, sem fallback para CDN, sem lançar', async () => {
@@ -114,6 +115,14 @@ describe('DrowsinessModel (inferência ONNX)', () => {
             await expect(model.initialize()).resolves.toBeUndefined();
             expect(model.isReady()).toBe(false);
             expect(modelStatusStore.getStatus()).toBe('error');
+            expect(h.create).not.toHaveBeenCalled();
+        });
+
+        it('runtime WASM ausente → status error, sem criar sessão', async () => {
+            vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: !String(url).includes('ort-wasm') })));
+            await model.initialize();
+            expect(model.isReady()).toBe(false);
+            expect(modelStatusStore.getError()).toContain('WASM');
             expect(h.create).not.toHaveBeenCalled();
         });
 

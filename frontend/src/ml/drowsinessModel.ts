@@ -11,6 +11,11 @@ import { userModelStore } from './userModel/userModelStore';
 import { NUM_FEATURES } from './featureOrder';
 import { medianFilter } from './smoothing';
 
+// Runtime WASM empacotado pelo Vite a partir do pacote instalado (`?url`): mesmo origin, offline,
+// versão sempre igual à do JS. Não passa por /public (o dev server do Vite recusa JS de /public).
+import ortWasmUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url';
+import ortMjsUrl from '../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url';
+
 type ORT = typeof import('onnxruntime-web');
 
 export interface InferenceSession {
@@ -24,7 +29,7 @@ let ortModule: ORT | null = null;
 
 async function loadORT(): Promise<ORT> {
     if (ortModule) return ortModule;
-    ortModule = await import('onnxruntime-web');
+    ortModule = await import('onnxruntime-web/wasm'); // só backend WASM (sem WebGPU/jsep)
     return ortModule;
 }
 
@@ -81,11 +86,11 @@ class DrowsinessModel {
                     throw new Error(`Modelo ONNX ausente em ${LOCAL_MODEL_PATH}`);
                 }
 
-                // O binário WASM precisa ser exatamente da mesma versão do JS instalado.
-                const webVersion = ort.env.versions.web;
-                if (webVersion) {
-                    ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${webVersion}/dist/`;
+                // WASM do mesmo origin: sem código de terceiros em runtime (a página tem câmera).
+                if (!(await fetchExists(ortWasmUrl))) {
+                    throw new Error(`Runtime WASM do ORT indisponível em ${ortWasmUrl}`);
                 }
+                ort.env.wasm.wasmPaths = { mjs: ortMjsUrl, wasm: ortWasmUrl };
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const session = await (ort.InferenceSession as any).create(LOCAL_MODEL_PATH, {
