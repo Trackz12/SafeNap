@@ -210,54 +210,52 @@ O módulo `FeatureExtractor` mantém uma **janela deslizante** dos últimos N fr
 
 ## Detecção de sonolência via ML (`src/ml/`)
 
-O sistema de ML roda **100% no navegador** usando `onnxruntime-web` (WASM) para classificar o estado de sonolência a partir das 18 features extraídas por frame.
+> **Status: EXPERIMENTAL / NÃO VALIDADO.** O ONNX embarcado foi treinado **apenas em dados
+> sintéticos** (não em NTHU/UTA-RLDD nem em pessoas reais). Não há métrica de desempenho de
+> detecção de sonolência. Detalhes, evidências e limites: [`docs/ML_PIPELINE.md`](ML_PIPELINE.md).
 
-### Arquitetura
+O ML roda **100% no navegador** (`onnxruntime-web`, WASM) sobre as 18 features do `FeatureExtractor`.
 
 ```
-FrameAnalysis → featureExtractor.extract() → FeatureVector (18 feats)
+FrameAnalysis → featureExtractor.extract() → FeatureVector (18 feats, ordem em shared/feature_schema.json)
                                                  ↓
-                                    drowsinessModel.inferAsync() → score [0,1]
+                          drowsinessModel.inferAsync() → score P(DROWSY) ∈ [0,1]  (mediana de 3)
                                                  ↓
-                                    detectionEngine.evaluate() → WARNING/ALARM
+                          detectionEngine.evaluate() → regras + ML (política abaixo) → WARNING/ALARM
 ```
-
-### Componentes
 
 | Arquivo | Responsabilidade |
 |---------|-----------------|
-| `ml/featureOrder.ts` | Contrato das 18 features (ordem exata = schema do modelo) |
-| `ml/thresholds.ts` | Limiares ML: WARNING=0.85, ALARM=0.95, RELEASE=0.70 |
-| `ml/vectorToTensor.ts` | FeatureVector → Float32Array(18), com sentinel para null e NaN |
-| `ml/modelStatusStore.ts` | Pub/sub do status: idle → loading → ready/error |
-| `ml/drowsinessModel.ts` | Lazy load do ONNX, inferência assíncrona (200ms throttle), mediana de 3 |
-| `ml/smoothing.ts` | Mediana pura para suavizar o score |
-| `ml/mlReasons.ts` | Funções puras: combina razões de regra + ML conforme o modo |
+| `ml/featureOrder.ts` | Contrato das 18 features (espelha `shared/feature_schema.json`; testes de paridade) |
+| `ml/thresholds.ts` | ML: WARNING=0,85, ALARM=0,95, RELEASE=0,70; throttle 200 ms; timeout 2 s |
+| `ml/vectorToTensor.ts` | Único conversor FeatureVector → array/Float32Array (sentinela -1; NaN/Infinity → `null`) |
+| `ml/drowsinessModel.ts` | Lazy load, 1 `run()` em voo, descarte de resultados antigos, timeout, status de erro |
+| `ml/smoothing.ts` | Mediana do score |
+| `ml/mlReasons.ts` | Política regras + ML |
+| `ml/modelStatusStore.ts` | Status idle → loading → ready/error |
 
-### Modos de detecção
+### Política de decisão (modos `rules` | `ml` | `hybrid`)
 
-| Modo | WARNING | ALARM |
-|------|---------|-------|
-| `rules` | Só regras (PERCLOS, bocejo, etc.) | Só regras |
-| `ml` | ML ≥ 0.85 → ML_WARNING; fallback regras | ML ≥ 0.95 → ML_ALARM; fallback regras |
-| `hybrid` | ML **ou** regras (qualquer um dispara) | ML **ou** regras |
-
-Modo default: `hybrid`. Togglável via `detectionEngine.setMode()`.
+- **Regra de alarme** (microsleep, olhos fechados, PERCLOS crítico): sempre dispara `ALARM`.
+- **ML ≥ 0,85** → `ML_WARNING` (em `ml`/`hybrid`).
+- **ML ≥ 0,95** → `ML_ALARM` **somente com uma regra de aviso fisiológica ativa** (PERCLOS,
+  fechamento prolongado, tendência de EAR, piscadas lentas, bocejo, queda de cabeça; `FACE_LOST`
+  não conta). **O ML não origina ALARM sozinho.**
+- `ml` e `hybrid` são hoje equivalentes (regras + ML); `rules` ignora o ML.
+- ML indisponível, com erro ou score velho (> 1,5 s; ≤ 8 s se já em ALARM) → `null` → só regras.
+- Liberação do ALARM exige ML < 0,70 (ou `null`), olhos abertos e PERCLOS baixo.
 
 ### Inferência
 
-- **Lazy loading:** `drowsinessModel.initialize()` carrega o ONNX via dynamic import (não bloqueia a câmera).
-- **Throttle:** inferência no máximo 1× a cada 200ms (`INFERENCE_INTERVAL_MS`).
-- **Mediana:** score suavizado por janela de 3 (spike rejection).
-- **Staleness gate:** score com mais de 1500ms é descartado (fallback para regras).
-- **Fallback:** se o modelo não carrega ou dá erro → `getLastScore()` retorna `null` → engine continua 100% em regras.
+- Throttle de 200 ms; um `run()` em voo por vez; resultado de geração anterior (após `reset()`/timeout) é descartado.
+- 3 falhas consecutivas → status `error` na UI; o engine segue em regras.
+- Sem fallback de modelo por CDN de terceiros; o WASM do ORT é carregado do jsDelivr **na mesma versão** do pacote instalado.
 
 ### Modelo ONNX
 
-- **Treino:** `ml/scripts/train.py` treina Random Forest sobre dados do NTHU/UTA-RLDD, exporta ONNX quantizado (int8).
-- **Deploy:** `frontend/public/models/drowsiness.onnx` (<100KB).
-- **WASM:** `onnxruntime-web` (lazy-loaded, ~21MB WASM, ~390KB JS em chunk separado).
-- **Pipeline completo:** `ml/README.md` documenta download → extração → treino → deploy.
+- **Origem:** `ml/scripts/generate_realistic_model.py` (dados **sintéticos**; `drowsiness.model-card.json` ao lado do `.onnx`).
+- **Treino com dados reais (ainda não feito):** `extract_features.py` → `train_model.py` → `evaluate.py` (ver ML_PIPELINE.md §10).
+- **Não é** int8 nem foi treinado em NTHU/UTA (afirmações anteriores desta doc estavam incorretas).
 
 ### UI
 

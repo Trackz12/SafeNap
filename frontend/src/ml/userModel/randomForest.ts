@@ -47,3 +47,39 @@ export function predictUserRF(model: UserRF, features: number[]): number {
     }
     return sum / model.trees.length;
 }
+
+const MAX_TREES = 200;
+const MAX_TREE_DEPTH = 12;
+const MAX_TREE_NODES = 20_000;
+const MAX_TRAINED_AT_SKEW_MS = 24 * 60 * 60 * 1000;
+
+function validNode(node: unknown, depth: number, budget: { nodes: number }): boolean {
+    if (depth > MAX_TREE_DEPTH || ++budget.nodes > MAX_TREE_NODES) return false;
+    if (typeof node !== 'object' || node === null) return false;
+    const n = node as CARTNode;
+    if (n.featureIndex === undefined) {
+        return typeof n.prediction === 'number' && Number.isFinite(n.prediction)
+            && n.prediction >= 0 && n.prediction <= 1;
+    }
+    return Number.isInteger(n.featureIndex) && n.featureIndex >= 0 && n.featureIndex < NUM_FEATURES
+        && typeof n.threshold === 'number' && Number.isFinite(n.threshold)
+        && validNode(n.left, depth + 1, budget) && validNode(n.right, depth + 1, budget);
+}
+
+/**
+ * Modelo vindo de localStorage ou de outro dispositivo (sync) não é confiável:
+ * um modelo malformado geraria NaN, estouraria a pilha ou fixaria "alerta" para
+ * sempre. Devolve o modelo se for estruturalmente seguro, senão null.
+ */
+export function validateUserRF(raw: unknown): UserRF | null {
+    if (typeof raw !== 'object' || raw === null) return null;
+    const m = raw as Partial<UserRF>;
+    if (!Array.isArray(m.trees) || m.trees.length < 1 || m.trees.length > MAX_TREES) return null;
+    if (typeof m.trainedAt !== 'number' || !Number.isFinite(m.trainedAt)
+        || m.trainedAt > Date.now() + MAX_TRAINED_AT_SKEW_MS) return null;
+    if (typeof m.sampleCount !== 'number' || !Number.isFinite(m.sampleCount)) return null;
+    for (const tree of m.trees) {
+        if (!validNode(tree, 0, { nodes: 0 })) return null;
+    }
+    return m as UserRF;
+}

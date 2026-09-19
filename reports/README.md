@@ -93,9 +93,8 @@ pessimista, não o que o usuário real experimenta.
 excluídas da matriz, reportadas separadamente (limitação do detector na
 resolução 100×100 do dataset, não do cálculo de EAR em si).
 
-**Achado colateral**: `ml/scripts/extract_features.py` (pipeline de treino do
-modelo ONNX) usa a API antiga `mediapipe.solutions.face_mesh`, que **não
-existe mais** em nenhuma versão do mediapipe instalável neste Python
-(3.14) — teve que ser reescrito para a API `mediapipe.tasks.vision.FaceLandmarker`
-neste script novo. Vale atualizar o pipeline de treino também, mas ficou
-fora do escopo desta rodada.
+**Achado colateral (resolvido depois)**: `ml/scripts/extract_features.py` usava a API antiga
+`mediapipe.solutions.face_mesh`, removida do mediapipe. Foi reescrito para
+`mediapipe.tasks.vision.FaceLandmarker`, com geometria/janela/PERCLOS idênticas ao frontend
+(paridade testada, ver `docs/ML_PIPELINE.md`). Lembrete: o CEW valida **EAR (olho aberto/fechado)**,
+não detecção de sonolência.

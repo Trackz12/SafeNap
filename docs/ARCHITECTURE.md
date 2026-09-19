@@ -56,7 +56,7 @@ FeatureExtractor (janela 10 frames) → FeatureVector (18 features)
     ↓
 ┌─────────────────┬──────────────────┐
 │ Modelo Usuário  │ Modelo ONNX      │
-│ (CART/RF local) │ (RF quantizado)  │
+│ (CART/RF local) │ (RF sintético)   │
 │ localStorage    │ lazy-loaded WASM │
 └────────┬────────┴────────┬─────────┘
          └────┬────────────┘
@@ -81,6 +81,9 @@ FeatureExtractor (janela 10 frames) → FeatureVector (18 features)
 
 ### Pipeline Python (`ml/`)
 
-Scripts para treinar o modelo ONNX genérico a partir de datasets públicos (NTHU, UTA-RLDD):
-- `download_datasets.py` → `extract_features.py` → `train_model.py` → `export_onnx.py`
-- Modelo exportado: RF quantizado int8, <100KB, input [1,18] float32, output [1,2] probabilidades
+> O ONNX embarcado é **sintético e experimental**; ver [`ML_PIPELINE.md`](ML_PIPELINE.md).
+
+- `shared/feature_schema.json` — ordem única das 18 features (Python e TS testam paridade).
+- `extract_features.py` (FaceLandmarker + manifesto, estado por vídeo) → `train_model.py` (split por sujeito, 4 candidatos, ONNX + `model_card.json`) → `evaluate.py`.
+- `generate_realistic_model.py` — reproduz o ONNX **sintético** embarcado.
+- Contrato do modelo: entrada `features [N,18] float32`, saídas `label` e `probabilities [N,2]` (classe DROWSY = índice 1; só o índice 1 é comparável entre ORT Python e ORT-web). Sem quantização.

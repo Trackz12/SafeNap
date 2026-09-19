@@ -8,4 +8,10 @@ export const ML_STALE_MS = 1500;
 // rodar silenciosamente) bloquear a liberação do alarme para sempre.
 export const ML_STALE_DURING_ALARM_MS = 8000;
 export const INFERENCE_INTERVAL_MS = 200;
+// Inferência que não volta neste prazo é tratada como falha e seu resultado
+// descartado. Maior que ML_STALE_MS: enquanto trava, o score envelhece e as
+// regras assumem sozinhas.
+export const INFERENCE_TIMEOUT_MS = 2000;
+// Falhas consecutivas antes de o status do modelo virar 'error' na UI.
+export const MAX_CONSECUTIVE_FAILURES = 3;
 export const SMOOTHING_WINDOW = 3;

@@ -8,6 +8,10 @@ Uso:
     python scripts/download_datasets.py --dataset uta --out ../data/raw/uta
     python scripts/download_datasets.py --dataset nthu --out ../data/raw/nthu
 
+ATENÇÃO: NENHUM download é automático hoje — os IDs do UTA-RLDD são `FILL_ME` e o NTHU exige
+aprovação. Este script só cria as pastas e lembra o que fazer; depois escreva o manifesto
+(video,subject_id,label) e rode scripts/extract_features.py.
+
 Nota: o NTHU requer aprovação acadêmica (formulário de acesso). O download
 automático só funciona para o UTA-RLDD, que é publicamente acessível via
 Google Drive (pasta pública). Para o NTHU, coloque os vídeos manualmente em

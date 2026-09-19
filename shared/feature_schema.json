@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Fonte única de verdade do vetor de 18 features do SafeNap. frontend/src/ml/featureOrder.ts e ml/features/schema.py DEVEM refletir este arquivo; testes de paridade (featureSchema.test.ts e ml/tests/test_schema_parity.py) falham se divergirem. Mudar a ordem invalida todo modelo ONNX treinado antes.",
+  "features": [
+    "ear", "earL", "earR", "mouthAspect", "noseDropRatio", "yawRatio",
+    "earMean", "earStdDev", "earMin", "earMax", "earTrendPerSec",
+    "blinkRate", "msSinceLastBlink", "perclos",
+    "mouthMean", "mouthMax", "mouthTrendPerSec", "noseDropMean"
+  ],
+  "nullBlinkSentinel": -1,
+  "window": {
+    "bufferSize": 10,
+    "minFrames": 3,
+    "maxGapMs": 1000,
+    "targetFps": 10
+  },
+  "units": {
+    "ear": "razão adimensional (média de 4 distâncias verticais / distância horizontal do olho, 3D, coordenadas normalizadas MediaPipe)",
+    "mouthAspect": "razão adimensional (abertura vertical / largura da boca, 2D)",
+    "noseDropRatio": "razão adimensional ((nariz.y - meioOlhos.y) / dist(meioOlhos, queixo))",
+    "yawRatio": "razão adimensional COM SINAL ((nariz.x - meioOlhos.x) / dist entre cantos externos dos olhos)",
+    "earTrendPerSec": "variação de EAR por segundo (regressão linear na janela)",
+    "blinkRate": "piscadas por minuto (janela de 60 s)",
+    "msSinceLastBlink": "milissegundos desde a última piscada; -1 (nullBlinkSentinel) se nenhuma piscada registrada",
+    "perclos": "fração 0..1 do tempo com olhos fechados na janela de 60 s (segmentos < 400 ms ignorados)"
+  },
+  "landmarks": {
+    "leftEye": { "h": [33, 133], "verticals": [[158, 153], [160, 144], [159, 145], [157, 154]] },
+    "rightEye": { "h": [263, 362], "verticals": [[387, 373], [385, 380], [386, 374], [388, 390]] },
+    "eyeOuterLeft": 33,
+    "eyeOuterRight": 263,
+    "noseTip": 1,
+    "chin": 152,
+    "mouth": { "top": 13, "bottom": 14, "left": 61, "right": 291 }
+  }
+}
