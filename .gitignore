@@ -33,3 +33,6 @@ testsprite_tests/
 # Datasets brutos/derivados do ML (licenças proíbem redistribuir)
 data/
 ml/artifacts/
+
+# KiCad local history (repositório git aninhado, gerado pelo editor)
+hardware/kicad/*/.history/
