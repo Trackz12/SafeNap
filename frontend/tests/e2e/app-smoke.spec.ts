@@ -23,8 +23,14 @@ test.describe('App smoke', () => {
         await expect(page.getByText('Sessão atual', { exact: true })).toBeVisible();
         await expect(page.getByText('Calibração', { exact: true }).first()).toBeVisible();
         await expect(page.getByText('Controles', { exact: true })).toBeVisible();
-        await expect(page.getByText('Treinamento ML', { exact: true })).toBeVisible();
         await expect(page.getByText('Histórico', { exact: true })).toBeVisible();
+    });
+
+    test('modo normal: o card de treinamento experimental NÃO aparece', async ({ page }) => {
+        await page.goto('/');
+        await expect(page.getByText('Controles', { exact: true })).toBeVisible(); // dashboard já renderizou
+        // VITE_ENABLE_USER_MODEL desligado (padrão): nada sugere que o modelo do usuário participa da detecção.
+        await expect(page.getByText('Treinamento ML', { exact: true })).toHaveCount(0);
     });
 
     test('StatusGauge exibe PERCLOS inicial em NORMAL', async ({ page }) => {
