@@ -36,7 +36,7 @@ Por isso, desde esta revisão, o ML é um sinal **auxiliar**: pode gerar `WARNIN
             • featureExtractor (janela 10 frames) → 18 features
                  ├ mlDataCollector.collectFrame  (pseudo-rótulos → modelo do usuário)
                  └ drowsinessModel.inferAsync    (throttle 200 ms; 1 run() em voo)
-                      1º modelo do usuário  →  2º ONNX  →  mediana-3  → score P(DROWSY)
+                      ONNX (modelo do usuário só com VITE_ENABLE_USER_MODEL=true, 1ª prioridade; ver §12)  →  mediana-3  → score P(DROWSY)
             • evaluate(): score fresco (≤1,5 s; ≤8 s se já em ALARM) senão null
                  → combineWarning/AlarmReason (regras + ML, política §7) → fusão multi-sinal → histerese
         → WARNING/ALARM → wsClient.sendEvent → backend → Arduino
@@ -194,10 +194,13 @@ para o frontend.
 # (a) reproduz o ONNX SINTÉTICO embarcado (byte a byte com as mesmas versões)
 cd ml && python scripts/generate_realistic_model.py
 
-# (b) pipeline REAL — precisa dos datasets (manuais) e de um manifesto video,subject_id,label
-python scripts/extract_features.py --raw ../data/raw/uta --manifest manifest.csv \
+# (b) pipeline REAL — precisa dos datasets (baixados manualmente; NÃO disponíveis neste ambiente)
+python scripts/build_manifest.py uta --raw ../data/raw/uta --dry-run                         # 1º: só olhar o layout
+python scripts/build_manifest.py uta --raw ../data/raw/uta --out ../data/manifests/uta.csv \n    --confirm-labels uta_rldd/v1 --dataset-version "<versão>"                                # ver §13 e DATASET_PIPELINE.md
+python scripts/extract_features.py --raw ../data/raw/uta --manifest ../data/manifests/uta.csv \
     --landmarker ../frontend/public/mediapipe/models/face_landmarker.task --out ../data/features/uta.csv
-python scripts/train_model.py --data ../data/features/uta.csv --out-dir artifacts/run1 --seed 42
+python scripts/train_model.py --data ../data/features/uta.csv --out-dir ../reports/ml/uta_run1 \
+    --seed 42 --dataset-name "UTA-RLDD (0 vs 10)"
 python scripts/evaluate.py --model artifacts/run1/drowsiness.onnx --data <csv de sujeitos de teste>
 python scripts/train_model.py ... --deploy ../frontend/public/models   # só depois de revisar metrics.json
 
@@ -239,3 +242,111 @@ mudanças. Corrigidos a partir deles: validação estrutural de modelo remoto/pe
 "alerta"), amostras com NaN/Infinity, chaves de localStorage `v2` (dados `v1` usavam 0 em vez de -1
 para "sem piscada"), timeout de inferência agora reporta `error`, `ML_ALARM` via fusão exige regra de
 aviso, manifesto restrito a `--raw` e `evaluate.py --model-card` recusa sujeitos do treino.
+
+## 12. Modelo do usuário fora do caminho de segurança (2026-09-20)
+
+Achado: o RF do usuário era treinado em sessão (a cada 30 s, pseudo-rótulos do ONNX sintético, sem holdout)
+e tinha prioridade sobre o ONNX na inferência — o modelo de segurança mudava durante a condução.
+Correção: `isUserModelEnabled()` (`frontend/src/ml/thresholds.ts`, `VITE_ENABLE_USER_MODEL`, padrão desligado).
+Desligado: `drowsinessModel.inferAsync` ignora o modelo do usuário e `mlDataCollector.start()` não agenda o
+auto-treino. A infraestrutura (coleta, treino manual, sync) continua disponível para experimentação.
+Testes: `drowsinessModel.test.ts` (ignorado por padrão / prioridade só no modo experimental), `mlDataCollector.test.ts`.
+
+## 13. Pipeline pronto para dataset real (preparado, NÃO executado)
+
+> **Pipeline preparado, mas a validação de sonolência ainda não foi executada por ausência de dataset
+> real rotulado.** Nenhum treino com dado real, nenhuma métrica de sonolência e nenhum dado sintético
+> apresentado como validação existem neste repositório.
+
+### 13.1 Quatro tipos de validação (não misturar)
+
+| Tipo | O que responde | Estado |
+|---|---|---|
+| **Software** | O código faz o que a especificação diz? (testes unitários, paridade Python↔TS, Python↔ONNX, integração, build) | Feito e automatizado (Vitest 219, pytest 96, `tsc -b`, build) |
+| **Visão** | O EAR/landmarks distinguem olho aberto de fechado em pessoas reais? | Feito **só para estado do olho**, no CEW (`reports/ear_validation/`). **Não** é validação de sonolência. |
+| **Modelo de drowsiness** | O classificador separa sonolento de alerta em pessoas que ele nunca viu? | **Não executado.** Exige dataset com rótulo de sonolência (UTA-RLDD / NTHU-DDD). |
+| **Condições reais** | Funciona com condutores reais, em direção real, com o hardware? | **Não realizado.** |
+
+O ONNX embarcado continua **EXPERIMENTAL** (treinado só em dados sintéticos; `metrics: null`; ver §6).
+
+> **Detalhe operacional, auditoria dos adaptadores, integridade e procedimento de 17 passos: `docs/DATASET_PIPELINE.md`.**
+
+### 13.2 Do vídeo ao modelo
+
+```
+dataset real → build_manifest.py (adaptador por dataset) → manifest.csv (video,subject_id,label,source_label,...)
+  → extract_features.py (FaceLandmarker tasks, 18 features, estado NOVO por vídeo) → features.csv
+  → train_model.py (holdout por sujeito + GroupKFold no treino; RF/…; ONNX; paridade sklearn↔ORT)
+  → reports/ml/<run>/{model_card,metrics,experiment}.json + confusion_matrix.csv + drowsiness.onnx
+```
+
+Adaptadores em `ml/dataset_adapters/` (um por dataset, sem parser genérico):
+
+| Dataset | Sujeito | Vídeo/sessão | Rótulo | Quadro |
+|---|---|---|---|---|
+| UTA-RLDD (`uta_rldd.py`) | pasta-pai do vídeo | 1 vídeo por (sujeito, classe); `video_id` = caminho relativo | nome do arquivo (0/5/10) | não há rótulo por quadro: o vídeo inteiro herda a classe |
+| NTHU-DDD (`nthu_ddd.py`) | informado na tabela de pares | 1 vídeo com vários segmentos | arquivo de anotação por quadro | `--fps` obrigatório converte quadro → segundo |
+
+**A estrutura de pastas/anotações acima é SUPOSIÇÃO documentada, não verificada** (este ambiente não tem os
+datasets). Se os arquivos reais forem diferentes, os adaptadores **falham com erro claro**
+(`DatasetLayoutError`) em vez de adivinhar; ajuste-os depois de inspecionar o download. O layout antigo de
+`download_datasets.py` (`awake/low/high`, `Video/Evaluation`) não é usado.
+
+### 13.3 Rótulo do dataset → rótulo SafeNap (explícito, sem conversão silenciosa)
+
+> Todos os mapeamentos de **inclusão** abaixo são `UNVERIFIED` (vêm da descrição publicada dos datasets, não
+> conferida aqui) e só entram no manifesto com `--confirm-labels <id-do-mapa>`, depois de ler a documentação
+> oficial. "Equivalência direta" significa *pretendida*, não *comprovada*. Ver `DATASET_PIPELINE.md` §3.
+
+| Dataset | Rótulo original | SafeNap | Justificativa |
+|---|---|---|---|
+| UTA-RLDD | `0` (alerta) | 0 alerta | equivalência direta |
+| UTA-RLDD | `10` (sonolento) | 1 sonolento | equivalência direta |
+| UTA-RLDD | `5` (baixa vigilância) | **EXCLUÍDO** | intermediário: como "alerta" ensinaria que sonolência leve é normal; como "sonolento" inflaria a classe positiva. Contado em `excluded_by_source_label` |
+| NTHU-DDD | `0` (não sonolento) | 0 alerta | equivalência direta (formato do arquivo assumido) |
+| NTHU-DDD | `1` (sonolento) | 1 sonolento | idem |
+| NTHU-DDD | anotações de olhos/boca/cabeça | **não usadas** | são outras tarefas, não rótulo de sonolência |
+
+Ressalvas de rótulo: no UTA o rótulo é por vídeo inteiro (~10 min), não por instante — trechos desperto
+dentro de um vídeo "10" viram ruído de rótulo. Diferenças de aquisição (câmera, luz, óculos) entre datasets
+significam que desempenho em um não transfere automaticamente para o motorista real.
+
+### 13.4 Unidade de avaliação (dita em cada métrica)
+
+- **window** (`holdout_test`, `cv_train_subjects`): cada linha do CSV = 18 features de uma janela de ~1 s
+  terminada num quadro. Janelas vizinhas são quase idênticas → o tamanho de amostra *efetivo* é o número de
+  vídeos/sujeitos, não o de linhas; ler intervalos de confiança com isso em mente.
+- **clip** (`holdout_test_clip_level`): par `(video_id, label)`; probabilidade média das janelas ≥ limiar →
+  decisão do clipe. Só é calculada com ≥ 2 clipes de teste por classe; senão sai `available: false` + motivo.
+  Vídeo "inteiro" com um único rótulo (UTA) é um clipe; um vídeo NTHU com segmentos vira um clipe por rótulo.
+- **subject**: **não** calculada (exigiria agregar por pessoa e há poucos sujeitos por classe). O número de
+  sujeitos de teste é reportado em `split.test.subjects`.
+
+Métricas produzidas quando aplicáveis: accuracy, balanced accuracy, precision, recall/sensibilidade,
+especificidade, F1, matriz de confusão, ROC-AUC, PR-AUC (`ml/evaluation/metrics.py`); AUCs ficam `null` se
+o teste só tiver uma classe. Registrados junto: sujeitos, vídeos, clipes, linhas, positivos/negativos por
+partição.
+
+### 13.5 Split e vazamento
+
+`train ∩ test = ∅` e, em cada fold do GroupKFold, `treino(fold) ∩ validação(fold) = ∅` (validação =
+out-of-fold agrupado por sujeito, só sobre os sujeitos de treino, portanto também disjunta do teste).
+`assert_disjoint` aborta o treino com `ValueError("vazamento de grupos…")`; testes em
+`ml/tests/test_train_pipeline.py`. `evaluate.py` recusa CSVs com sujeitos de treino (model card).
+Se um dataset tiver a mesma pessoa sob `subject_id` diferentes (ex.: sessões), o split **não** detecta isso:
+o `subject_id` do manifesto precisa identificar a *pessoa*.
+
+### 13.6 Relatório reproduzível (`--out-dir`, convenção `reports/ml/<run>/`)
+
+`experiment.json` (dataset+sha256, seed, config, candidatos, split com contagens/IDs, features,
+`schema_hash`, `model_version`, versões das bibliotecas, timestamp), `metrics.json` (com
+`evaluation_units`), `model_card.json`, `confusion_matrix.csv`, `drowsiness.onnx`.
+`model_version = <modelo>-<schema_hash[:8]>-<sha256 do CSV[:8]>-s<seed>`. Mesmo CSV + config + seed +
+versões ⇒ mesmos bytes de ONNX (testado). O relatório responde "de onde saiu essa métrica?"; **não** prova
+desempenho em condutores reais.
+
+### 13.7 O que continua fora de escopo
+
+Agregação por **pessoa**; calibração individual do limiar de EAR offline (o offline usa 0,21 fixo, ver
+`extract_features.py`); intervalos de confiança / bootstrap por sujeito; implantação automática de modelo
+treinado (`--deploy` é manual e o card sai `EXPERIMENTAL`).

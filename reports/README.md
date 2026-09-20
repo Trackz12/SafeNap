@@ -64,6 +64,8 @@ A lacuna do item anterior foi fechada: validamos a classificação olho-
 aberto/fechado por EAR contra o **CEW (Closed Eyes in the Wild, NUAA)** —
 2423 pessoas reais (1192 com olhos fechados, 1231 abertos), fotos de rosto
 inteiro. Ver [`ear_validation/cew_results.md`](ear_validation/cew_results.md).
+**Escopo: valida o ESTADO DO OLHO (aberto/fechado), não a detecção de sonolência** — o CEW não tem
+rótulo de sonolência.
 
 **Como foi resolvido o bloqueio anterior** (RAR sem `unrar`/7-Zip instalado):
 usamos `node-unrar-js` — o unrar oficial compilado para WASM, distribuído
