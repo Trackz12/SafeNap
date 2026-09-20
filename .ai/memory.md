@@ -1,0 +1,56 @@
+# SafeNap — Memória de Longo Prazo
+
+Log append-only de sessões de IA/humanas. Entradas mais antigas no topo, novas no fim.
+Nunca apagar ou editar entradas antigas. Estado técnico atual: `.ai/state.md`.
+
+Formato:
+
+```
+## [YYYY-MM-DD] <IA/humano> | <resumo de uma linha>
+- Feito: ...
+- Decisões: ...
+- Lições: ...
+- Próximos passos: ...
+```
+
+---
+
+## [2026-09-12] bootstrap | Memória do projeto inicializada
+- Feito: criados este log, `.ai/state.md`, seção de memória no AGENTS.md e CLAUDE.md.
+- Decisões: memória vive no repo (arquivos markdown), não em serviço externo — qualquer IA lê/registra; versionada junto com o código.
+- Lições: nenhuma ainda.
+- Próximos passos: preencher `.ai/state.md` com a stack real na primeira sessão de trabalho.
+
+## [2026-09-19] Claude (Sonnet 5) | Auditoria completa da camada de ML/CV + correções + pipeline reprodutível
+- Feito: auditoria arquivo a arquivo; `docs/ML_PIPELINE.md` (auditoria, taxonomia IMPLEMENTADO/VALIDADO/EXPERIMENTAL/NÃO VALIDADO, como reproduzir). `shared/feature_schema.json` = fonte única das 18 features (testes de paridade por posição Py↔TS). Python (`ml/features/`) reescrito para espelhar `frameAnalyzer.ts`/`featureExtractor.ts`/DetectionEngine (fixture `shared/feature_golden.json`, igualdade a 1e-9 com o código TS real). `extract_features.py` (FaceLandmarker tasks, manifesto, estado por vídeo), `train_model.py` (holdout por sujeito, GroupKFold, 4 candidatos, ONNX+model card, bytes reprodutíveis), `evaluate.py` (estava quebrado), `ml/evaluation/metrics.py`. Frontend: `predictCART` (feature índice 0 tratada como folha), sentinela -1/NaN unificados (`featureVectorToArray`), `drowsinessModel` (descarte de resultado antigo por geração, timeout, status de erro, validação de I/O, sem fallback de modelo por CDN de terceiros, WASM alinhado à versão do pacote), política ML×regras. Testes: TS 132→196, Python 7→39.
+- Decisões (usuário): (1) rebaixar o ML — pode gerar WARNING, NÃO origina ALARM sozinho (ML≥0,95 só escala para ML_ALARM com regra de aviso fisiológica ativa; FACE_LOST não conta). (2) Só o CEW como dado real por enquanto: NTHU/UTA-RLDD NÃO estão disponíveis → nenhum treino real, nenhuma métrica de sonolência.
+- Lições: o ONNX embarcado é RF treinado em dados SINTÉTICOS (~3 nós/árvore); a doc antiga (train.py, int8, NTHU/UTA, ml/README.md, export_onnx.py) descrevia coisas inexistentes. Escala sintética do noseDrop ≠ real → pessoa acordada pontua P(drowsy)≈0,39. ORT-web 1.27 devolve `probabilities=[-p,p]` e `label=1` neste modelo (ORT Python: `[1-p,p]`) — só o índice 1 é confiável; o frontend só lê o índice 1. skl2onnx grava UUID aleatório em `graph.name` (normalizado). O `.venv` não tinha pandas (não foi criado do requirements). onnxruntime-web instalado 1.27 vs WASM do CDN fixo em 1.22 (corrigido). O cooldown de MICROSLEEP não bloqueia re-alarme (falha-segura, só caracterizado em teste). Modos `ml` e `hybrid` são equivalentes.
+- Removidos (justificado): `ml/scripts/generate_dummy_model.py` (escrevia no caminho de produção com dados aleatórios) e `ml/frontend/public/models/drowsiness.onnx` (órfão, 60 árvores de ruído). `onnxoptimizer` saiu do requirements (sem uso).
+- Próximos passos: obter NTHU/UTA-RLDD, decidir o mapeamento de rótulos (UTA 0/5/10 → binário), montar o manifesto e rodar o pipeline real; decidir se o modelo do usuário (destilado do ONNX sintético, sem holdout, prioridade sobre o ONNX) deve continuar; auto-hospedar o WASM do ORT; medir MediaPipe/ORT em navegador real; rodar `code-reviewer`/`security-reviewer` (não rodados).
+
+## [2026-09-19] Claude (Sonnet 5) | Revisões, correções de segurança e WASM do ORT auto-hospedado
+- Feito: code-reviewer + security-reviewer rodados; corrigidos validação de modelo remoto/persistido (`validateUserRF`), amostras não finitas, chaves localStorage v2, timeout→status error, gate de ML_ALARM na fusão, manifesto restrito a --raw, `evaluate.py --model-card`. WASM do ORT agora vem do mesmo origin via `?url` do Vite + entry `onnxruntime-web/wasm`; verificado em Chromium (status ready, score = ORT Python) e no build de produção. Branch `feat/ml-audit-pipeline` publicada.
+- Lições: o bundle padrão do onnxruntime-web pede a variante jsep (WebGPU); o dev server do Vite recusa JS de /public como módulo (usar `?url` de node_modules). Só o navegador real revelou isso (Node e testes unitários passavam).
+- Próximos passos: hash do ONNX em runtime (opcional), CSP, obter NTHU/UTA e rodar o pipeline real, e2e do app completo com câmera mockada conferindo o MlStatusCard.
+
+## [2026-09-20] Claude (Sonnet 5) | Verificação do checklist de correção cirúrgica (detecção/ML) + modelo do usuário fora do caminho de segurança
+- Feito: cada ponto do checklist foi verificado no código atual. JÁ CORRIGIDOS na sessão de 2026-09-19 (não refeitos): fórmula de noseDropRatio idêntica TS↔Python (`frameAnalyzer.ts:153` = `metrics.py:99`, golden a 1e-9); Python usa FaceLandmarker tasks (sem `mp.solutions`); features offline sem placeholder (blinkRate/PERCLOS via BlinkTracker espelhando o DetectionEngine); split por sujeito (GroupShuffleSplit + GroupKFold, teste de interseção vazia); ONNX↔Python coberto por `onnx_golden.json`/`test_model_contract`; ML antigo descartado (ML_STALE_MS, geração/epoch, timeout). CONFIRMADO e corrigido agora: auto-treino em runtime — `mlDataCollector` treinava o RF do usuário a cada 30 s e `drowsinessModel` o priorizava sobre o ONNX. Agora atrás de `VITE_ENABLE_USER_MODEL` (padrão off; `isUserModelEnabled()` em thresholds.ts).
+- Decisões: mudança mínima (flag), infraestrutura experimental preservada; treino manual segue disponível mas não afeta a segurança quando o flag está off.
+- Lições: o prompt de correção assumia problemas que a auditoria anterior já tinha resolvido — verificar antes de editar evitou retrabalho. Modelo ONNX continua EXPERIMENTAL/SINTÉTICO sem métricas; não há dataset real para retreino (NTHU/UTA-RLDD ausentes), então nenhuma métrica nova foi calculada.
+- Testes: TS 216 (20 arquivos), Python 41, tsc e build OK. Lint: só warnings pré-existentes de React em componentes.
+- Próximos passos: obter dataset real e rodar o pipeline; MlTrainingCard ainda aparece na UI com o flag off (decidir se esconde); auditar `signalFusion`/VisionQuality com dados reais (sem lacuna comprovada nesta sessão).
+
+## [2026-09-20] Claude (Sonnet 5) | Fechamento do pipeline de ML: UI experimental, adaptadores de dataset, relatório reproduzível
+- Feito: `MlTrainingCard` agora retorna null sem `VITE_ENABLE_USER_MODEL=true` (e se rotula "Experimental"; texto "Modelo ativo" trocado). `ml/dataset_adapters/` (UTA-RLDD por arquivo/pasta, NTHU-DDD por tabela de pares + anotação por quadro) + `scripts/build_manifest.py`; mapeamento de rótulos explícito (UTA 5 = EXCLUÍDO). `extract_features.py`: `video_id` = caminho relativo (antes `video.stem` colidia entre sujeitos: '0','5','10'); várias linhas do mesmo vídeo = 1 passada com rótulo por instante. `train_model.py`: `assert_disjoint` (treino/teste e cada fold), contagens por partição (sujeitos/vídeos/clipes/linhas/pos/neg), métrica por CLIPE (só com >=2 clipes/classe), `model_version`, `experiment.json` + `confusion_matrix.csv`, `--dataset-name`. `docs/ML_PIPELINE.md` §13 (4 tipos de validação, rótulos, unidade de avaliação). `download_datasets.py` deixou de afirmar layouts não verificados.
+- Decisões: pacote chama `dataset_adapters` (não `datasets`: colide com HuggingFace `datasets` se instalado). Sem métrica por sujeito (poucos sujeitos por classe). NENHUM treino real, nenhum dado sintético apresentado como validação.
+- Lições: layouts do UTA/NTHU são SUPOSIÇÃO (sem o dataset aqui) — adaptadores falham com `DatasetLayoutError` em vez de adivinhar; ajustar após inspecionar o download. Smoke test da CLI achou `UnicodeEncodeError` (seta "→" em print no console cp1252 do Windows) — nunca usar caracteres fora de cp1252 em print de scripts. Heredocs longos no Bash falham por aspas; usar Write + script.
+- Testes: Vitest 219 (21 arq.), pytest 55, tsc e build OK; lint só com warnings antigos.
+- Próximos passos: obter UTA-RLDD/NTHU-DDD, conferir layout real contra os adaptadores, rodar build_manifest -> extract_features -> train_model e registrar a validação de drowsiness; depois validação em condições reais. code-reviewer/security-reviewer ainda não rodados sobre esta mudança.
+
+## [2026-09-20] Claude (Sonnet 5) | Auditoria final do pipeline de dataset (sem dataset real, sem DetectionEngine)
+- Feito: `ml/dataset_adapters/` reescrito (LabelMap com status; TODO mapa de inclusão nasce UNVERIFIED e só entra com `--confirm-labels <id>`; problemas coletados, não lançados; sujeito/vídeo com namespace do dataset), `validation.py` (manifesto: existência, tamanho, duplicatas, sobreposição, mistura de sujeitos, `subject_key` p/ identidade duvidosa, arquivos idênticos, classes, `--probe`; CSV de features: timestamps, vídeo x sujeito, vetores duplicados, classes), `build_manifest.py` (+`--dry-run`, `dataset_summary.json`), `validate_manifest.py`, `extract_features.py` (descartes contados por motivo, `frame_index`/`dataset`/`relative_path`/`clip_id`, `.partial` só promovido se válido, `--dry-run`, `--skip-unreadable`, `_extraction_report.json`), `train_model.py` (valida o CSV na entrada; barreira de vídeo/clipe no holdout e nos folds). `docs/DATASET_PIPELINE.md` (auditoria por adaptador, tabelas de rótulo, procedimento de 17 passos).
+- Decisões: mapas de rótulo exigem confirmação humana explícita (id do mapa muda => reconfirmar). Etapas 1-4 (manifest, extração, treino) nunca encadeiam. `--dry-run` SIMULA a confirmação só para checar layout e diz isso.
+- Lições: layouts UTA/NTHU seguem SUPOSIÇÃO (sem os arquivos); testes com árvores fabricadas validam o adaptador, não a correspondência com o dataset oficial. Mutação (desligar gate de rótulo / promoção do CSV / reset de estado) derrubou os testes certos. Fixture sintético "fechado" (openness 0.1) tem EAR 0.255 > 0.21: testes de piscar usam `ear_threshold=0.30`. Rodar `npx` com cwd errado tenta baixar pacote `tsc` falso: usar caminho absoluto. Nunca usar setas/símbolos fora de cp1252 em `print` de scripts.
+- Testes: pytest 96, Vitest 219, tsc/build OK. Frontend/DetectionEngine intocados.
+- Próximos passos: obter UTA-RLDD/NTHU-DDD e executar o procedimento de `docs/DATASET_PIPELINE.md` §9 (começa por ler a doc oficial e rodar `--dry-run`). code-reviewer/security-reviewer NÃO rodados sobre esta mudança.
+

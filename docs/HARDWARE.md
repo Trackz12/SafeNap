@@ -9,7 +9,10 @@ firmware histórico das simulações originais do TCC — **um** sensor FSR-402
 (não dois) e **quatro** motores de vibração (não um):
 
 - **Pino 4:** Buzzer Piezoelétrico.
-- **Pinos 5, 6, 7, 8:** quatro motores de vibração (acionados juntos).
+- **Pino 5:** os quatro motores de vibração, em paralelo no hardware (um
+  único estágio de dreno — ver `hardware/kicad/safenap/`), já que
+  `setMotors()` sempre os liga/desliga juntos, nunca individualmente. Os
+  pinos 6, 7 e 8 ficam livres (não usados mais).
 - **Pino 13:** LED embutido da placa (usado para feedback visual de que o alarme ativou).
 - **Pino A0 (entrada analógica):** um sensor de força resistiva FSR-402, montado na empunhadura simulada do volante (segundo sinal de sonolência, fundido em OR com a visão computacional — ver `docs/ARCHITECTURE.md`).
 

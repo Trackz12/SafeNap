@@ -1,55 +1,15 @@
 import math
 
-from features.metrics import (
-    FeatureExtractor,
-    compute_frame_features,
-    linear_trend,
-    mean,
-    stddev,
-)
+import pytest
 
+from features import FeatureExtractor, analyze_frame, combine_eyes
+from features.metrics import LEFT_EYE, dist3d, linear_trend, mean, stddev
 from features.schema import FEATURE_ORDER, NUM_FEATURES
+from make_golden_fixture import build_points, full_landmarks
 
 
-def make_landmarks(ear_scale: float = 1.0):
-    """Gera landmarks sintéticos com EAR proporcional ao ear_scale."""
-    # Eye vertical distances controlam o EAR. Simples aproximação:
-    # landmarks em grid, olhos na região superior.
-    lm = [(0.0, 0.0, 0.0)] * 478
-    # Preenche pontos de referência
-    lm[33] = (0.35, 0.35, 0.0)   # olho esquerdo outer
-    lm[133] = (0.45, 0.35, 0.0)  # olho esquerdo inner
-    lm[159] = (0.40, 0.33, 0.0)  # top 1
-    lm[158] = (0.40, 0.33, 0.0)
-    lm[157] = (0.40, 0.33, 0.0)
-    lm[173] = (0.40, 0.33, 0.0)
-    lm[145] = (0.40, 0.35 + 0.02 * ear_scale, 0.0)  # bottom 1
-    lm[153] = (0.40, 0.35 + 0.02 * ear_scale, 0.0)
-    lm[154] = (0.40, 0.35 + 0.02 * ear_scale, 0.0)
-    lm[155] = (0.40, 0.35 + 0.02 * ear_scale, 0.0)
-
-    lm[362] = (0.55, 0.35, 0.0)  # olho direito outer
-    lm[263] = (0.65, 0.35, 0.0)  # olho direito inner
-    lm[386] = (0.60, 0.33, 0.0)
-    lm[385] = (0.60, 0.33, 0.0)
-    lm[384] = (0.60, 0.33, 0.0)
-    lm[398] = (0.60, 0.33, 0.0)
-    lm[374] = (0.60, 0.35 + 0.02 * ear_scale, 0.0)
-    lm[380] = (0.60, 0.35 + 0.02 * ear_scale, 0.0)
-    lm[381] = (0.60, 0.35 + 0.02 * ear_scale, 0.0)
-    lm[382] = (0.60, 0.35 + 0.02 * ear_scale, 0.0)
-
-    # Boca
-    lm[13] = (0.50, 0.55, 0.0)
-    lm[14] = (0.50, 0.56, 0.0)
-    lm[61] = (0.46, 0.555, 0.0)
-    lm[291] = (0.54, 0.555, 0.0)
-
-    # Nariz
-    lm[1] = (0.50, 0.50, 0.0)
-    lm[168] = (0.50, 0.42, 0.0)
-
-    return lm
+def face(openness=1.0, mouth=0.03, yaw=0.0, drop=0.0):
+    return full_landmarks(build_points(openness, mouth, yaw, drop))
 
 
 def test_feature_order_len():
@@ -57,57 +17,77 @@ def test_feature_order_len():
     assert len(set(FEATURE_ORDER)) == NUM_FEATURES
 
 
-def test_compute_frame_features():
-    lm_open = make_landmarks(ear_scale=1.0)
-    f_open = compute_frame_features(lm_open)
-
-    lm_closed = make_landmarks(ear_scale=0.1)
-    f_closed = compute_frame_features(lm_closed)
-
-    assert f_open['ear'] > f_closed['ear']
-    assert f_open['ear'] > 0
-    assert set(['ear', 'earL', 'earR', 'mouthAspect', 'noseDropRatio', 'yawRatio']).issubset(f_open)
+def test_analyze_frame_open_vs_closed_and_keys():
+    open_, closed = analyze_frame(face(1.0)), analyze_frame(face(0.1))
+    assert open_["ear"] > closed["ear"] > 0
+    assert set(open_) == {"ear", "earL", "earR", "mouthAspect", "noseDropRatio", "yawRatio"}
 
 
-def test_extractor_warmup():
-    fe = FeatureExtractor(min_frames=3)
-    f = compute_frame_features(make_landmarks(1.0))
+def test_ear_scale_matches_frontend_formula_mean_of_four_over_h():
+    """Regressão do desvio 2x: EAR = média dos 4 pares / largura horizontal (não soma / 2h)."""
+    lm = face(1.0)
+    h = dist3d(lm[33], lm[133])
+    v = [dist3d(lm[u], lm[lo]) for u, lo in LEFT_EYE["verticals"]]
+    assert analyze_frame(lm)["earL"] == pytest.approx(sum(v) / (4 * h), rel=1e-12)
+
+
+@pytest.mark.parametrize("bad", [None, [], [(0.5, 0.5, 0.0)] * 299])
+def test_insufficient_landmarks_returns_none(bad):
+    assert analyze_frame(bad) is None
+
+
+def test_face_too_small_or_at_edge_returns_none():
+    lm = face()
+    lm[263] = (lm[33][0] + 0.05, lm[33][1], 0.0)  # largura < MIN_FACE_WIDTH
+    assert analyze_frame(lm) is None
+    lm = face()
+    lm[152] = (0.5, 0.995, 0.0)  # queixo na borda
+    assert analyze_frame(lm) is None
+
+
+def test_nan_landmark_does_not_produce_features():
+    lm = face()
+    lm[159] = (float("nan"), 0.4, 0.0)
+    assert analyze_frame(lm) is None
+
+
+def test_combine_eyes_disagreement_and_profile():
+    assert combine_eyes(0.3, 0.3) == pytest.approx(0.3)
+    assert combine_eyes(0.1, 0.35) == pytest.approx(0.35)  # frontal, discordância -> olho aberto
+    assert combine_eyes(0.1, 0.35, yaw_ratio=0.9) == pytest.approx(0.35)  # perfil pleno -> olho visível
+
+
+def test_extractor_warmup_gap_and_trend():
+    fe = FeatureExtractor(min_frames=3, max_gap_ms=1000)
+    f = analyze_frame(face())
     assert fe.extract(f, 0, 0.0, 0.0, None) is None
     assert fe.extract(f, 100, 0.0, 0.0, None) is None
     fv = fe.extract(f, 200, 0.0, 0.0, None)
-    assert fv is not None
-    assert set(FEATURE_ORDER).issubset(fv)
+    assert fv is not None and set(fv) == set(FEATURE_ORDER)
+    assert fv["msSinceLastBlink"] == -1  # sentinela
+    assert fe.extract(f, 5000, 0.0, 0.0, None) is None  # gap > 1 s reinicia a janela
+
+    fe.reset()
+    out = None
+    for i, o in enumerate([1.0, 0.7, 0.4, 0.2]):
+        out = fe.extract(analyze_frame(face(o)), i * 100, 0.0, 0.0, None)
+    assert out["earTrendPerSec"] < 0
 
 
-def test_extractor_gap_reset():
-    fe = FeatureExtractor(min_frames=3, max_gap_ms=1000)
-    f = compute_frame_features(make_landmarks(1.0))
-    fe.extract(f, 0, 0.0, 0.0, None)
-    fe.extract(f, 100, 0.0, 0.0, None)
-    fe.extract(f, 200, 0.0, 0.0, None)
-    assert fe.extract(f, 5000, 0.0, 0.0, None) is None
+def test_extractor_ignores_non_monotonic_timestamps():
+    fe = FeatureExtractor()
+    f = analyze_frame(face())
+    for t in (0, 100, 200):
+        fe.extract(f, t, 0, 0, None)
+    n = len(fe.buffer)
+    fe.extract(f, 150, 0, 0, None)
+    assert len(fe.buffer) == n
 
 
-def test_extractor_trend():
-    fe = FeatureExtractor(min_frames=3)
-    base = compute_frame_features(make_landmarks(1.0))
-    for i, scale in enumerate([1.0, 0.7, 0.4, 0.2]):
-        f = compute_frame_features(make_landmarks(scale))
-        fv = fe.extract(f, i * 100, 0.0, 0.0, None)
-    assert fv is not None
-    assert fv['earTrendPerSec'] < 0
-
-
-def test_mean_stddev():
-    assert mean([]) == 0
-    assert mean([2, 4, 6]) == 4
+def test_mean_stddev_trend():
+    assert mean([]) == 0 and mean([2, 4, 6]) == 4
     assert stddev([3, 3, 3]) == 0
-    assert abs(stddev([2, 4, 4, 4, 5, 5, 7, 9]) - 2.0) < 1e-5
-
-
-def test_linear_trend():
-    pts = [(0, 0.1), (100, 0.2), (200, 0.3), (300, 0.4)]
-    assert linear_trend(pts) > 0
-    pts2 = [(0, 0.4), (100, 0.3), (200, 0.2), (300, 0.1)]
-    assert linear_trend(pts2) < 0
+    assert stddev([2, 4, 4, 4, 5, 5, 7, 9]) == pytest.approx(2.0)
+    assert linear_trend([(0, 0.1), (100, 0.2), (200, 0.3)]) == pytest.approx(1.0)  # +1 por segundo
     assert linear_trend([(0, 1)]) == 0
+    assert math.isfinite(linear_trend([(5, 1), (5, 2)]))

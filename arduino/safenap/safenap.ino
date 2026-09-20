@@ -1,11 +1,12 @@
-// Pinagem historica (confirmada pelo firmware original das simulacoes do
-// TCC): buzzer no pino 4, quatro motores de vibracao nos pinos 5-8, LED
-// embutido no pino 13, sensor de pressao FSR-402 no pino analogico A0.
+// Pinagem: buzzer no pino 4, LED embutido no pino 13, sensor de pressao
+// FSR-402 no pino analogico A0. Os 4 motores de vibracao SEMPRE ligam e
+// desligam juntos (setMotors() nunca os trata individualmente) -- por
+// isso o hardware (ver hardware/kicad/safenap/) usa um UNICO estagio de
+// dreno (1 transistor) acionando os 4 motores em paralelo a partir de um
+// UNICO pino digital, em vez de 4 estagios/pinos separados como no
+// firmware historico das simulacoes do TCC.
 const int PIN_BUZZER = 4;
-const int PIN_MOTOR_1 = 5;
-const int PIN_MOTOR_2 = 6;
-const int PIN_MOTOR_3 = 7;
-const int PIN_MOTOR_4 = 8;
+const int PIN_MOTORS = 5;
 const int PIN_LED = 13;
 
 // Sensor de pressao FSR-402 (empunhadura do volante): UM sensor, divisor
@@ -28,10 +29,7 @@ void setup() {
 
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_MOTOR_1, OUTPUT);
-  pinMode(PIN_MOTOR_2, OUTPUT);
-  pinMode(PIN_MOTOR_3, OUTPUT);
-  pinMode(PIN_MOTOR_4, OUTPUT);
+  pinMode(PIN_MOTORS, OUTPUT);
 
   allActuatorsOff();
 
@@ -82,10 +80,7 @@ void loop() {
 }
 
 void setMotors(int state) {
-  digitalWrite(PIN_MOTOR_1, state);
-  digitalWrite(PIN_MOTOR_2, state);
-  digitalWrite(PIN_MOTOR_3, state);
-  digitalWrite(PIN_MOTOR_4, state);
+  digitalWrite(PIN_MOTORS, state);
 }
 
 void allActuatorsOff() {

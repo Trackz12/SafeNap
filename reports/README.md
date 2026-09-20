@@ -39,12 +39,33 @@ de engenharia), **não** que os limiares escolhidos correspondem à sonolência
 real de uma pessoa (validação empírica) — essa segunda parte segue como
 trabalho futuro.
 
+## `grip_scenarios/` e `fusion_scenarios/` — FSR isolado e sistema integrado
+
+Mesmo princípio da bateria de visão, mas separando os três alvos que o
+parecer do orientador pediu explicitamente para não misturar:
+
+| Pasta | O que testa | Resultado |
+|---|---|---|
+| `grip_scenarios/` | `GripMonitor` isolado (FSR) — 10 cenários (queda breve vs. sustentada, histerese, deriva de baseline, sem corte automático) | precisão/recall/F1 = 1,000 |
+| `fusion_scenarios/` | `SafetyManager` — sistema integrado (visão + FSR fundidos em OR), 11 cenários focados na garantia de que nenhuma fonte apaga o alarme da outra | precisão/recall/F1 = 1,000 |
+
+Reproduza com `cd backend && python -m pytest tests/test_grip_monitor_scenarios.py tests/test_safety_manager_scenarios.py -v`.
+
+**Mesma ressalva da bateria de visão**: isso é verificação de especificação
+(o código faz o que os limiares documentados dizem que ele deve fazer), não
+validação com dados humanos reais. Diferente da visão (onde existe o CEW),
+**não há dataset público de pressão de empunhadura veicular rotulado** —
+essa lacuna específica do FSR só se fecha com validação de campo (bancada
+física ou condutores reais), que continua como trabalho futuro.
+
 ## `ear_validation/` — EAR contra dados humanos reais (CEW) ✅ concluído
 
 A lacuna do item anterior foi fechada: validamos a classificação olho-
 aberto/fechado por EAR contra o **CEW (Closed Eyes in the Wild, NUAA)** —
 2423 pessoas reais (1192 com olhos fechados, 1231 abertos), fotos de rosto
 inteiro. Ver [`ear_validation/cew_results.md`](ear_validation/cew_results.md).
+**Escopo: valida o ESTADO DO OLHO (aberto/fechado), não a detecção de sonolência** — o CEW não tem
+rótulo de sonolência.
 
 **Como foi resolvido o bloqueio anterior** (RAR sem `unrar`/7-Zip instalado):
 usamos `node-unrar-js` — o unrar oficial compilado para WASM, distribuído
@@ -74,9 +95,8 @@ pessimista, não o que o usuário real experimenta.
 excluídas da matriz, reportadas separadamente (limitação do detector na
 resolução 100×100 do dataset, não do cálculo de EAR em si).
 
-**Achado colateral**: `ml/scripts/extract_features.py` (pipeline de treino do
-modelo ONNX) usa a API antiga `mediapipe.solutions.face_mesh`, que **não
-existe mais** em nenhuma versão do mediapipe instalável neste Python
-(3.14) — teve que ser reescrito para a API `mediapipe.tasks.vision.FaceLandmarker`
-neste script novo. Vale atualizar o pipeline de treino também, mas ficou
-fora do escopo desta rodada.
+**Achado colateral (resolvido depois)**: `ml/scripts/extract_features.py` usava a API antiga
+`mediapipe.solutions.face_mesh`, removida do mediapipe. Foi reescrito para
+`mediapipe.tasks.vision.FaceLandmarker`, com geometria/janela/PERCLOS idênticas ao frontend
+(paridade testada, ver `docs/ML_PIPELINE.md`). Lembrete: o CEW valida **EAR (olho aberto/fechado)**,
+não detecção de sonolência.

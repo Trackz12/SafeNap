@@ -1,0 +1,86 @@
+{
+  "methodology": "Cenarios sinteticos executados contra o GripMonitor real (nao uma reimplementacao), com relogio controlado. Verdade-fundamental atribuida pelos autores com base nos limiares documentados em docs/HARDWARE.md -- verificacao de especificacao, nao validacao com dados humanos reais (nao ha dataset publico de pressao de empunhadura veicular disponivel, diferente da visao computacional).",
+  "total_scenarios": 10,
+  "correct": 10,
+  "confusion_matrix_binary": {
+    "tp": 4,
+    "fp": 0,
+    "tn": 6,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "scenarios": [
+    {
+      "name": "pressao_estavel",
+      "description": "Pressão constante na baseline",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "queda_breve_300ms",
+      "description": "Queda de pressão por 300ms (< WARNING_MS=500ms)",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "queda_sustentada_600ms",
+      "description": "Queda de pressão por 600ms (> WARNING_MS=500ms)",
+      "ground_truth": "WARNING",
+      "predicted": "WARNING",
+      "correct": true
+    },
+    {
+      "name": "queda_sustentada_1200ms",
+      "description": "Queda de pressão por 1200ms (> ALARM_MS=1000ms)",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "recuperacao_apos_alarme",
+      "description": "Pressão volta acima de 60% da baseline após ALARM",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "recuperacao_parcial_nao_libera",
+      "description": "Pressão sobe mas fica entre 35% e 60% da baseline (histerese não libera)",
+      "ground_truth": "WARNING",
+      "predicted": "WARNING",
+      "correct": true
+    },
+    {
+      "name": "deriva_gradual_baseline",
+      "description": "Deriva lenta de pressão (baseline adaptativa acompanha)",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "sem_calibracao",
+      "description": "Leitura baixa isolada sem baseline calibrada ainda",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    },
+    {
+      "name": "alarme_sustentado_sem_autocorte",
+      "description": "Queda mantida por 30s — sem corte automático",
+      "ground_truth": "ALARM",
+      "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "reset_apos_reconexao",
+      "description": "Reset (simula queda/reconexão de serial) limpa o estado",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
+      "correct": true
+    }
+  ]
+}

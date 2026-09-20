@@ -3,6 +3,7 @@ import { userModelStore } from '../ml/userModel/userModelStore';
 import { mlDataCollector } from '../ml/mlDataCollector';
 import { modelStatusStore } from '../ml/modelStatusStore';
 import { roleStore } from '../sync/roleStore';
+import { isUserModelEnabled } from '../ml/thresholds';
 import { Brain, Loader2, Trash2, RefreshCw, Eye } from 'lucide-react';
 
 const MIN_SAMPLES = 50;
@@ -39,12 +40,17 @@ export const MlTrainingCard: React.FC = () => {
         }, 100);
     };
 
+    // Modo normal: o modelo do usuário não participa da detecção — não mostrar
+    // um controle que sugira o contrário. (Hooks acima ficam incondicionais.)
+    if (!isUserModelEnabled()) return null;
+
     return (
         <div className="glass-panel" style={{ padding: 'var(--space-4)' }}>
             <div className="glass-panel-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <Brain size={14} color="var(--primary)" />
                     <span className="glass-panel-title">Treinamento ML</span>
+                    <span className="badge badge-muted">Experimental</span>
                 </div>
                 {isViewer && (
                     <span className="badge badge-muted">
@@ -130,7 +136,7 @@ export const MlTrainingCard: React.FC = () => {
                         {!canTrain
                             ? `Coletando dados… (${Math.min(alertCount, MIN_SAMPLES) + Math.min(drowsyCount, MIN_SAMPLES)}/${MIN_SAMPLES * 2})`
                             : modelStatus === 'ready'
-                                ? `Modelo ativo (${model?.sampleCount ?? '…'} amostras)`
+                                ? `Modelo experimental treinado (${model?.sampleCount ?? '…'} amostras, sem validação)`
                                 : 'Modelo ainda não treinado'
                         }
                     </div>

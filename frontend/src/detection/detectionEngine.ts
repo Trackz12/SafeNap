@@ -7,7 +7,7 @@ import { featureExtractor, type FeatureVector } from './featureExtractor';
 import { drowsinessModel } from '../ml/drowsinessModel';
 import { mlDataCollector } from '../ml/mlDataCollector';
 import { ML_STALE_MS, ML_STALE_DURING_ALARM_MS, ML_RELEASE_THRESHOLD } from '../ml/thresholds';
-import { combineWarningReason, combineAlarmReason, type DetectionMode } from '../ml/mlReasons';
+import { combineWarningReason, combineAlarmReason, isCorroboratingWarning, type DetectionMode } from '../ml/mlReasons';
 import { fuseSignals, isWarning, isAlarm } from './signalFusion';
 
 export type DetectionState = 'NORMAL' | 'WARNING' | 'ALARM';
@@ -659,7 +659,7 @@ export class DetectionEngine {
         let warnedReason = combineWarningReason(this.detectionMode, ruleWarn, this.lastMlScore);
         let alarmReason = microsleepTriggered || (ruleAlarm && ruleAlarm !== 'MICROSLEEP')
             ? ruleAlarm
-            : combineAlarmReason(this.detectionMode, ruleAlarm !== 'MICROSLEEP' ? null : ruleAlarm, this.lastMlScore);
+            : combineAlarmReason(this.detectionMode, ruleAlarm !== 'MICROSLEEP' ? null : ruleAlarm, this.lastMlScore, ruleWarn);
 
         // ── Fusão multi-sinal (fallback inteligente) ─────────────────────
         // Quando nenhuma regra binária dispara isoladamente, a soma ponderada
@@ -704,6 +704,9 @@ export class DetectionEngine {
                     alarmReason = 'ML_ALARM';
                 }
             }
+            // Invariante da política: ML_ALARM nunca sai sem uma regra de aviso
+            // fisiológica ativa, nem pelo caminho da fusão.
+            if (alarmReason === 'ML_ALARM' && !isCorroboratingWarning(ruleWarn)) alarmReason = null;
             if (warnedReason === null && isWarning(fusion)) {
                 const dom = fusion.dominantReason;
                 warnedReason = (dom === 'PERCLOS' || dom === 'YAWN' || dom === 'HEAD_DROP' ||

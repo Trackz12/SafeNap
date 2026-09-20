@@ -1,62 +1,59 @@
-"""Avalia o modelo ONNX exportado contra um CSV de teste.
+"""Avalia um ONNX exportado contra um CSV de features (usa as probabilidades reais, não o label).
+
+O ideal é avaliar em sujeitos que NÃO estiveram no treino (ver model_card.json → split.test_subjects).
 
 Uso:
-    python scripts/evaluate.py --model ../frontend/public/models/drowsiness.onnx \
-        --data ../data/features/test.csv
-
-Não requer sklearn — usa onnxruntime diretamente (validar no browser).
+    python scripts/evaluate.py --model ../frontend/public/models/drowsiness.onnx --data ../data/features/test.csv [--threshold 0.5]
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import numpy as np
+import onnxruntime as ort
 import pandas as pd
 
-try:
-    import onnxruntime as ort
-except ImportError:
-    sys.exit("pip install onnxruntime")
+from evaluation.metrics import binary_metrics  # noqa: E402
+from features.schema import FEATURE_ORDER, SCHEMA_HASH  # noqa: E402
 
-from features.schema import FEATURE_ORDER, NUM_FEATURES
+
+def check_no_train_subjects(df: pd.DataFrame, card_path: Path) -> list:
+    """Sujeitos do CSV que estiveram no TREINO segundo o model card (avaliá-los infla as métricas)."""
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    if card.get("schema_hash") != SCHEMA_HASH:
+        raise ValueError("schema_hash do model card difere do schema atual: ordem de features incompatível")
+    train = set(map(str, card.get("split", {}).get("train_subjects", [])))
+    return sorted(train & set(df["subject_id"].astype(str))) if "subject_id" in df else []
+
+
+def evaluate(model_path: Path, csv_path: Path, threshold: float, card_path: Path = None) -> dict:
+    df = pd.read_csv(csv_path)
+    if card_path is not None:
+        leaked = check_no_train_subjects(df, card_path)
+        if leaked:
+            raise ValueError(f"vazamento: sujeitos de treino no CSV de avaliação: {leaked[:5]}")
+    X = df[FEATURE_ORDER].to_numpy(dtype=np.float32)
+    if not np.isfinite(X).all():
+        raise ValueError("features com NaN/Infinity no CSV")
+    y = df["label"].to_numpy(dtype=int)
+    sess = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    probs = sess.run(["probabilities"], {sess.get_inputs()[0].name: X})[0][:, 1]  # P(DROWSY)
+    return binary_metrics(y, (probs >= threshold).astype(int), probs)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Avalia modelo ONNX")
-    parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--data", type=Path, required=True)
-    args = parser.parse_args()
-
-    sess = ort.InferenceSession(str(args.model), providers=['CPUExecutionProvider'])
-
-    df = pd.read_csv(args.data)
-    X = df[FEATURE_ORDER].fillna(-1).to_numpy(dtype=np.float32)
-    y = df['label'].to_numpy()
-
-    preds = []
-    probs = []
-    for row in X:
-        inp = {sess.get_inputs()[0].name: row.reshape(1, NUM_FEATURES)}
-        out = sess.run(None, inp)[0]
-        preds.append(int(np.argmax(out[0])))
-        probs.append(float(out[0][1]))
-
-    acc = float(np.mean(np.array(preds) == y))
-    tp = sum(1 for p, t in zip(preds, y) if p == 1 and t == 1)
-    fp = sum(1 for p, t in zip(preds, y) if p == 1 and t == 0)
-    fn = sum(1 for p, t in zip(preds, y) if p == 0 and t == 1)
-    prec = tp / (tp + fp) if (tp + fp) else 0.0
-    rec = tp / (tp + fn) if (tp + fn) else 0.0
-    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
-
-    print(f"Amostras: {len(y)}  (drowsy={int(y.sum())}, alerta={int((1 - y).sum())})")
-    print(f"Accuracy: {acc:.4f}")
-    print(f"Precision: {prec:.4f}  Recall: {rec:.4f}  F1: {f1:.4f}")
-
-    # Distribuição de probabilidade drowsy
-    qs = np.percentile(probs, [50, 75, 90, 95, 99])
-    print(f"P50/P75/P90/P95/P99 drowsy prob: {[f'{q:.3f}' for q in qs]}")
+    p = argparse.ArgumentParser(description="Avalia modelo ONNX")
+    p.add_argument("--model", type=Path, required=True)
+    p.add_argument("--data", type=Path, required=True)
+    p.add_argument("--threshold", type=float, default=0.5)
+    p.add_argument("--model-card", type=Path, default=None,
+                   help="model_card.json: recusa avaliar sujeitos que estiveram no treino")
+    a = p.parse_args()
+    print(json.dumps(evaluate(a.model, a.data, a.threshold, a.model_card), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

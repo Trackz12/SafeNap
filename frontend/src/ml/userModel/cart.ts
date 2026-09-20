@@ -128,9 +128,8 @@ export function trainCART(X: number[][], y: number[], featureIndices?: number[])
 }
 
 export function predictCART(tree: CARTNode, features: number[]): number {
-    if (tree.prediction !== undefined && !tree.featureIndex) {
-        return tree.prediction;
-    }
+    // Folha = nó sem split. Não usar `!tree.featureIndex`: o índice 0 ('ear',
+    // a feature mais informativa) é falsy e fazia todo nó dividido nela virar folha.
     if (tree.featureIndex === undefined || tree.threshold === undefined || !tree.left || !tree.right) {
         return tree.prediction ?? 0.5;
     }

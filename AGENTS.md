@@ -12,3 +12,19 @@ Estas regras são **OBRIGATÓRIAS** para qualquer agente ou IA trabalhando neste
 8. **Testes**: Testar localmente antes de considerar uma tarefa como concluída.
 9. **Dependências**: Não adicionar bibliotecas sem real necessidade.
 10. **Referência Antiga**: Consultar o projeto antigo apenas como **referência funcional** (para entender algoritmos). Não copiar a arquitetura do projeto antigo!
+
+## Memória de Longo Prazo do Projeto
+
+Este projeto mantém memória persistente entre sessões de IA em `.ai/memory.md`.
+
+- **Ao iniciar qualquer sessão**: leia `.ai/memory.md` antes de trabalhar. É o histórico do que já foi feito, decisões tomadas e lições aprendidas — por qualquer IA (Claude, OpenCode, Gemini, etc.) ou humano.
+- **Ao encerrar trabalho significativo**: anexe ao final de `.ai/memory.md` uma entrada no formato:
+  ```
+  ## [YYYY-MM-DD] <IA/humano> | <resumo de uma linha>
+  - Feito: <mudanças principais>
+  - Decisões: <decisões e por quê>
+  - Lições: <armadilhas, padrões, o que funcionou>
+  - Próximos passos: <pendências conhecidas>
+  ```
+- Nunca apague ou edite entradas antigas — o log é append-only.
+- Estado técnico atual (stack, comandos, convenções) fica em `.ai/state.md`, atualizado quando a realidade muda.

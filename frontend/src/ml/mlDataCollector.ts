@@ -3,9 +3,9 @@ import { detectionEngine } from '../detection/detectionEngine';
 import { userModelStore } from './userModel/userModelStore';
 import { drowsinessModel } from './drowsinessModel';
 import type { FeatureVector } from '../detection/featureExtractor';
-import { FEATURE_ORDER } from './featureOrder';
+import { featureVectorToArray } from './vectorToTensor';
 import { modelStatusStore } from './modelStatusStore';
-import { ML_STALE_MS } from './thresholds';
+import { ML_STALE_MS, isUserModelEnabled } from './thresholds';
 
 const AUTO_TRAIN_INTERVAL_MS = 30_000;
 const MAX_SAMPLES_PER_CLASS = 500;
@@ -13,19 +13,15 @@ const MAX_SAMPLES_PER_CLASS = 500;
 /** Confiança mínima do ONNX para gerar pseudo-label (0-1). */
 const PSEUDO_LABEL_CONFIDENCE = 0.65;
 
-function fvToArray(fv: FeatureVector): number[] {
-    return FEATURE_ORDER.map((k) => {
-        const val = (fv as unknown as Record<string, number>)[k];
-        return typeof val === 'number' && Number.isFinite(val) ? val : 0;
-    });
-}
-
 class MlDataCollector {
     private autoTrainTimer: ReturnType<typeof setInterval> | null = null;
     private lastAutoTrainAt = 0;
     private training = false;
 
     public start(): void {
+        // Treino automático em sessão altera o modelo em uso durante a condução:
+        // só no modo experimental. Fora dele, o treino é apenas manual (offline do caminho de segurança).
+        if (!isUserModelEnabled()) return;
         if (this.autoTrainTimer) return;
         this.autoTrainTimer = setInterval(
             () => this.autoTrainCheck(),
@@ -60,7 +56,10 @@ class MlDataCollector {
         const label = this.resolveLabel();
         if (label === null) return;
 
-        const arr = fvToArray(fv);
+        // Mesma conversão do caminho de inferência (sentinela -1 p/ sem piscada);
+        // vetor com NaN/Infinity é descartado em vez de virar 0 silenciosamente.
+        const arr = featureVectorToArray(fv);
+        if (arr === null) return;
         const alertCount = userModelStore.getAlertCount();
         const drowsyCount = userModelStore.getDrowsyCount();
 

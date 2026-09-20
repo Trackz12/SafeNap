@@ -1,30 +1,42 @@
-"""Gera um modelo ONNX realista para drowsiness detection.
+"""Gera o ONNX SINTÉTICO embarcado no frontend (EXPERIMENTAL — NÃO VALIDADO).
 
-Treina um RandomForest em dados sintéticos que simulam padrões reais
-de EAR/PERCLOS/bocejo para olhos abertos vs sonolentos.
+ATENÇÃO: este modelo NÃO foi treinado com pessoas reais. Ele aprende distribuições
+escritas à mão em `generate_realistic_data` (EAR alto/baixo, PERCLOS, boca, cabeça).
+Por construção as duas classes são quase perfeitamente separáveis (as árvores têm ~3
+nós), então QUALQUER acurácia medida nesses dados é circular e não diz nada sobre
+sonolência real. Consequência conhecida (docs/ML_PIPELINE.md): as faixas sintéticas de
+`noseDropRatio` não correspondem à escala real do frontend, e um vetor de pessoa
+acordada recebe P(drowsy) ≈ 0,39 em vez de ≈ 0.
 
-Uso:
-    python scripts/generate_realistic_model.py
+Por isso o SafeNap trata o ML como sinal auxiliar: ele pode gerar WARNING, mas não
+origina ALARM sozinho (frontend/src/ml/mlReasons.ts). O caminho para um modelo com
+evidência experimental é scripts/extract_features.py → scripts/train_model.py com
+NTHU-DDD / UTA-RLDD (não disponíveis neste repositório).
+
+Uso (reproduz o artefato embarcado, byte a byte com as mesmas versões):
+    python scripts/generate_realistic_model.py [--out-dir ../frontend/public/models]
 """
 
+import argparse
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import json
+from datetime import datetime, timezone
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import cross_val_score
 
-try:
-    from skl2onnx import convert_sklearn
-    from skl2onnx.common.data_types import FloatTensorType
-except ImportError:
-    sys.exit("pip install scikit-learn skl2onnx onnx")
+from features.schema import FEATURE_ORDER, NUM_FEATURES, SCHEMA_HASH
+from train_model import ONNX_OPSET, export_onnx, library_versions, sha256_file, verify_onnx
 
-from features.schema import FEATURE_ORDER, NUM_FEATURES
+SEED = 42
+N_PER_CLASS = 1500
+RF_PARAMS = dict(n_estimators=100, max_depth=10, min_samples_leaf=3, class_weight="balanced",
+                 random_state=SEED, n_jobs=1)
 
-# Índices das features no FEATURE_ORDER
 IDX = {name: i for i, name in enumerate(FEATURE_ORDER)}
 
 
@@ -121,61 +133,40 @@ def generate_realistic_data(n_per_class: int = 1500, seed: int = 42):
     return X, y
 
 
-def main():
-    out_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "public" / "models"
-    out_dir.mkdir(parents=True, exist_ok=True)
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Gera o ONNX sintético embarcado (EXPERIMENTAL)")
+    parser.add_argument("--out-dir", type=Path,
+                        default=Path(__file__).resolve().parents[2] / "frontend" / "public" / "models")
+    out_dir = parser.parse_args().out_dir
     out_path = out_dir / "drowsiness.onnx"
 
-    print("Gerando dados sintéticos realistas...")
-    X, y = generate_realistic_data()
-    print(f"  {len(y)} amostras: {int((1-y).sum())} alerta, {int(y.sum())} sonolento")
+    print("[SINTÉTICO] gerando dados escritos à mão — NÃO são pessoas reais")
+    X, y = generate_realistic_data(N_PER_CLASS, SEED)
+    clf = RandomForestClassifier(**RF_PARAMS).fit(X, y)
+    export_onnx(clf, out_path)
+    parity = verify_onnx(clf, out_path, X[::20])
 
-    print("Treinando RF...")
-    clf = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=10,
-        min_samples_leaf=3,
-        class_weight='balanced',
-        random_state=42,
-        n_jobs=-1,
-    )
-    clf.fit(X, y)
-
-    acc = clf.score(X, y)
-    print(f"  Accuracy (treino): {acc:.4f}")
-
-    scores = cross_val_score(clf, X, y, cv=5, scoring='accuracy')
-    print(f"  Accuracy (5-fold CV): {scores.mean():.4f} ± {scores.std():.4f}")
-
-    print("Exportando ONNX...")
-    initial_type = [('features', FloatTensorType([None, NUM_FEATURES]))]
-    onx = convert_sklearn(clf, initial_types=initial_type,
-                          target_opset=19,
-                          options={'zipmap': False})
-    out_path.write_bytes(onx.SerializeToString())
-
-    size_kb = out_path.stat().st_size / 1024
-    print(f"[ok] modelo gerado -> {out_path} ({size_kb:.1f} KB)")
-
-    import onnxruntime as ort
-    sess = ort.InferenceSession(str(out_path), providers=['CPUExecutionProvider'])
-    dummy_alert = np.zeros((1, NUM_FEATURES), dtype=np.float32)
-    dummy_alert[0, IDX['ear']] = 0.34
-    dummy_alert[0, IDX['earL']] = 0.34
-    dummy_alert[0, IDX['earR']] = 0.34
-    dummy_alert[0, IDX['perclos']] = 0.05
-
-    dummy_drowsy = np.zeros((1, NUM_FEATURES), dtype=np.float32)
-    dummy_drowsy[0, IDX['ear']] = 0.12
-    dummy_drowsy[0, IDX['earL']] = 0.12
-    dummy_drowsy[0, IDX['earR']] = 0.12
-    dummy_drowsy[0, IDX['perclos']] = 0.55
-
-    inp = sess.get_inputs()[0].name
-    p_alert = sess.run(None, {inp: dummy_alert})[1][0]
-    p_drowsy = sess.run(None, {inp: dummy_drowsy})[1][0]
-    print(f"  Teste alerta:   class0={p_alert[0]:.4f}, class1={p_alert[1]:.4f}")
-    print(f"  Teste sonolento: class0={p_drowsy[0]:.4f}, class1={p_drowsy[1]:.4f}")
+    card = {
+        "status": "EXPERIMENTAL/SINTÉTICO — treinado apenas em dados sintéticos; NÃO validado",
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "seed": SEED, "model": "random_forest",
+        "hyperparameters": {k: str(v) for k, v in RF_PARAMS.items()},
+        "features": FEATURE_ORDER, "schema_hash": SCHEMA_HASH,
+        "dataset": {"kind": "sintético (scripts/generate_realistic_model.py::generate_realistic_data)",
+                    "rows": int(len(y)), "class_counts": {"alert(0)": int((y == 0).sum()), "drowsy(1)": int((y == 1).sum())}},
+        "metrics": None,
+        "metrics_note": "Deliberadamente ausentes: métricas em dados sintéticos são circulares e não medem sonolência real.",
+        "known_limitations": [
+            "noseDropRatio sintético (0–0,35) não cobre a escala real do frontend (~0,3–0,5): pessoa acordada pontua ≈ 0,39.",
+            "Árvores com ~3 nós: o modelo é essencialmente limiares em poucas features.",
+            "Nunca avaliado em NTHU-DDD, UTA-RLDD ou condutores reais.",
+        ],
+        "onnx": {"file": out_path.name, "sha256": sha256_file(out_path), "opset": ONNX_OPSET, **parity},
+        "libraries": library_versions(),
+    }
+    (out_dir / "drowsiness.model-card.json").write_text(json.dumps(card, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[ok] {out_path} ({out_path.stat().st_size / 1024:.1f} KB) sha256={card['onnx']['sha256'][:16]}…")
+    print("     + drowsiness.model-card.json (status: EXPERIMENTAL/SINTÉTICO)")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,12 @@
 import { NUM_FEATURES } from '../featureOrder';
 import type { UserRF } from './randomForest';
-import { trainUserRF, predictUserRF } from './randomForest';
+import { trainUserRF, predictUserRF, validateUserRF } from './randomForest';
 
-const STORAGE_KEY = 'safenap_ml_user_data_v1';
-const MODEL_KEY = 'safenap_ml_user_model_v1';
+// v2: v1 codificava "sem piscada" como 0; agora é -1 (featureVectorToArray). Dados/modelo v1
+// misturariam duas codificações, então são descartados (o modelo do usuário é retreinável).
+const STORAGE_KEY = 'safenap_ml_user_data_v2';
+const MODEL_KEY = 'safenap_ml_user_model_v2';
+const LEGACY_KEYS = ['safenap_ml_user_data_v1', 'safenap_ml_user_model_v1'];
 const MIN_SAMPLES_PER_CLASS = 50;
 
 interface Sample {
@@ -24,10 +27,20 @@ function notify(): void {
     for (const cb of listeners) cb();
 }
 
+function isValidSample(s: unknown): s is Sample {
+    if (typeof s !== 'object' || s === null) return false;
+    const x = s as Partial<Sample>;
+    return (x.label === 0 || x.label === 1) && Array.isArray(x.features)
+        && x.features.length === NUM_FEATURES
+        && x.features.every((v) => typeof v === 'number' && Number.isFinite(v));
+}
+
 function loadSamples(): Sample[] {
     try {
+        for (const k of LEGACY_KEYS) localStorage.removeItem(k);
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
+        const parsed: unknown = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter(isValidSample) : [];
     } catch {
         return [];
     }
@@ -62,7 +75,7 @@ function saveSamplesNow(): void {
 function loadModel(): UserRF | null {
     try {
         const raw = localStorage.getItem(MODEL_KEY);
-        return raw ? JSON.parse(raw) : null;
+        return raw ? validateUserRF(JSON.parse(raw)) : null;
     } catch {
         return null;
     }
@@ -98,7 +111,7 @@ export const userModelStore = {
     },
 
     addSample(features: number[], label: 0 | 1): void {
-        if (features.length !== NUM_FEATURES) return;
+        if (!isValidSample({ features, label, collectedAt: 0 })) return;
         samples.push({ features, label, collectedAt: Date.now() });
         scheduleSave();
         notify();
@@ -132,9 +145,10 @@ export const userModelStore = {
      * compartilhado para que o viewer use o mesmo classificador.
      */
     applyRemoteModel(remote: UserRF): void {
-        if (!remote || !Array.isArray(remote.trees)) return;
-        if (!model || remote.trainedAt > model.trainedAt) {
-            model = remote;
+        const valid = validateUserRF(remote);
+        if (!valid) return;
+        if (!model || valid.trainedAt > model.trainedAt) {
+            model = valid;
             saveModel(model);
             notify();
         }

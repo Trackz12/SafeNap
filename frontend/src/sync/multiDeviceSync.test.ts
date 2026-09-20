@@ -181,7 +181,7 @@ describe('multiDeviceSync - viewer aplica métricas do detector', () => {
     it('MODEL_SYNC adota o modelo do detector', () => {
         recv(EventType.DETECTOR_TAKEN, { owner: 'other-device' });
         recv(EventType.MODEL_SYNC, {
-            model: { version: 1, trees: [{ featureIndex: 0, threshold: 0.2, prediction: 1 }], trainedAt: 999, sampleCount: 120 },
+            model: { version: 1, trees: [{ featureIndex: 0, threshold: 0.2, left: { prediction: 1 }, right: { prediction: 0 }, prediction: 0.5 }], trainedAt: 999, sampleCount: 120 },
         });
         expect(userModelStore.getModel()).not.toBeNull();
         expect(userModelStore.getModel()!.trainedAt).toBe(999);

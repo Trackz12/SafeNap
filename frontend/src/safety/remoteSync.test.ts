@@ -120,7 +120,7 @@ describe('sessionStats.applyRemote (viewer espelha sessão do detector)', () => 
 describe('userModelStore.applyRemoteModel (viewer adota o modelo do detector)', () => {
     const dummyModel = {
         version: 1,
-        trees: [{ featureIndex: 0, threshold: 0.2, prediction: 1, count: 60 }],
+        trees: [{ featureIndex: 0, threshold: 0.2, left: { prediction: 1 }, right: { prediction: 0 }, prediction: 0.5, count: 60 }],
         trainedAt: 1000,
         sampleCount: 120,
     };
