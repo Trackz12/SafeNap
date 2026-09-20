@@ -6,6 +6,7 @@ import {
     INFERENCE_TIMEOUT_MS,
     MAX_CONSECUTIVE_FAILURES,
     SMOOTHING_WINDOW,
+    isUserModelEnabled,
 } from './thresholds';
 import { userModelStore } from './userModel/userModelStore';
 import { NUM_FEATURES } from './featureOrder';
@@ -135,15 +136,18 @@ class DrowsinessModel {
         const features = featureVectorToArray(fv);
         if (!features) return;
 
-        // Prioridade: modelo do usuário > ONNX
-        const userScore = userModelStore.predict(features);
-        if (userScore !== null) {
-            this.lastInferenceAt = now;
-            this.publishScore(userScore);
-            return;
+        // Modelo do usuário só participa quando habilitado explicitamente
+        // (experimental, ver isUserModelEnabled); senão o ONNX é a única fonte.
+        if (isUserModelEnabled()) {
+            const userScore = userModelStore.predict(features);
+            if (userScore !== null) {
+                this.lastInferenceAt = now;
+                this.publishScore(userScore);
+                return;
+            }
         }
 
-        // Fallback: modelo ONNX
+        // Modelo ONNX
         if (!this.session || !this.ort) return;
 
         this.inFlight = true;

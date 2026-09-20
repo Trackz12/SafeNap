@@ -228,13 +228,28 @@ describe('DrowsinessModel (inferência ONNX)', () => {
             expect(model.getLastScore()).toEqual({ score: null, at: null });
         });
 
-        it('modelo do usuário tem prioridade e dispensa o ONNX', async () => {
-            const s = await ready();
-            vi.spyOn(userModelStore, 'predict').mockReturnValue(0.7);
+        it('por padrão o modelo do usuário é IGNORADO: o ONNX é a única fonte', async () => {
+            const s = await ready(makeSession(() => Promise.resolve(probs(0.2))));
+            const predict = vi.spyOn(userModelStore, 'predict').mockReturnValue(0.99);
             infer();
             await flush();
-            expect(model.getLastScore().score).toBeCloseTo(0.7, 5);
-            expect(s.run).not.toHaveBeenCalled();
+            expect(predict).not.toHaveBeenCalled();
+            expect(s.run).toHaveBeenCalledTimes(1);
+            expect(model.getLastScore().score).toBeCloseTo(0.2, 5);
+        });
+
+        it('modo experimental (VITE_ENABLE_USER_MODEL=true): modelo do usuário tem prioridade e dispensa o ONNX', async () => {
+            vi.stubEnv('VITE_ENABLE_USER_MODEL', 'true');
+            try {
+                const s = await ready();
+                vi.spyOn(userModelStore, 'predict').mockReturnValue(0.7);
+                infer();
+                await flush();
+                expect(model.getLastScore().score).toBeCloseTo(0.7, 5);
+                expect(s.run).not.toHaveBeenCalled();
+            } finally {
+                vi.unstubAllEnvs();
+            }
         });
     });
 

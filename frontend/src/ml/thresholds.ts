@@ -15,3 +15,13 @@ export const INFERENCE_TIMEOUT_MS = 2000;
 // Falhas consecutivas antes de o status do modelo virar 'error' na UI.
 export const MAX_CONSECUTIVE_FAILURES = 3;
 export const SMOOTHING_WINDOW = 3;
+
+/**
+ * Modelo do usuário (RF treinado em runtime com pseudo-rótulos do ONNX) é
+ * EXPERIMENTAL: sem holdout, sem métrica, treinado durante a sessão. Por padrão
+ * fica FORA do caminho de segurança — não pontua, não treina sozinho. Só liga
+ * com VITE_ENABLE_USER_MODEL=true (experimentação). Lido a cada chamada.
+ */
+export function isUserModelEnabled(): boolean {
+    return import.meta.env?.VITE_ENABLE_USER_MODEL === 'true';
+}

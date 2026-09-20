@@ -5,7 +5,7 @@ import { drowsinessModel } from './drowsinessModel';
 import type { FeatureVector } from '../detection/featureExtractor';
 import { featureVectorToArray } from './vectorToTensor';
 import { modelStatusStore } from './modelStatusStore';
-import { ML_STALE_MS } from './thresholds';
+import { ML_STALE_MS, isUserModelEnabled } from './thresholds';
 
 const AUTO_TRAIN_INTERVAL_MS = 30_000;
 const MAX_SAMPLES_PER_CLASS = 500;
@@ -19,6 +19,9 @@ class MlDataCollector {
     private training = false;
 
     public start(): void {
+        // Treino automático em sessão altera o modelo em uso durante a condução:
+        // só no modo experimental. Fora dele, o treino é apenas manual (offline do caminho de segurança).
+        if (!isUserModelEnabled()) return;
         if (this.autoTrainTimer) return;
         this.autoTrainTimer = setInterval(
             () => this.autoTrainCheck(),
