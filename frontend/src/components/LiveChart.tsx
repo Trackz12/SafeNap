@@ -126,11 +126,17 @@ export const LiveChart: React.FC = () => {
                 {/* Baseline */}
                 <line x1={PAD.left} x2={W - PAD.right} y1={baseline} y2={baseline} stroke="var(--border-default)" strokeWidth="1" />
 
-                {/* Empty state */}
+                {/* Empty state: ponto pulsante junto ao texto — sinaliza "escutando",
+                    não "travado" (os eixos/grade acima já mostram a estrutura do gráfico).
+                    Classe CSS (não SMIL): a regra global de prefers-reduced-motion cobre
+                    animações CSS, não <animate>. */}
                 {history.length < 2 && (
-                    <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="11" fill="var(--text-faint)">
-                        Aguardando dados…
-                    </text>
+                    <g>
+                        <circle className="animate-pulse-dot" cx={W / 2 - 46} cy={H / 2} r="3" fill="var(--text-faint)" />
+                        <text x={W / 2 - 36} y={H / 2 + 4} textAnchor="start" fontSize="11" fill="var(--text-faint)">
+                            Aguardando dados…
+                        </text>
+                    </g>
                 )}
 
                 {/* X-axis labels */}

@@ -296,8 +296,21 @@ export const CameraView: React.FC = () => {
 
                 {/* Empty / loading states */}
                 {!isActive && !isLoading && (
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-faint)' }}>Câmera inativa</span>
+                    <div
+                        style={{
+                            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)',
+                        }}
+                    >
+                        {/* Silhueta pontilhada: mostra onde o rosto vai ser enquadrado —
+                            ensina o propósito do painel em vez de deixar um vazio mudo. */}
+                        <div className="camera-empty-outline" aria-hidden="true" />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-1)' }}>
+                            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', fontWeight: 500 }}>Câmera inativa</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-faint)' }}>
+                                Clique em "Iniciar" para começar o monitoramento
+                            </span>
+                        </div>
                     </div>
                 )}
                 {isLoading && (
