@@ -343,6 +343,22 @@ export class DetectionEngine {
         this.slowBlinkTimestamps = [];
         this.lastFeatureVector = null;
         this.lastMlScore = null;
+        // BUG corrigido: estes dois campos não eram resetados aqui. Como o
+        // reconhecimento normalmente acontece com os olhos ainda medidos como
+        // fechados no frame seguinte, `belowThresholdStreak` já estava >=
+        // closeConfirmFrames (a pessoa estava em ALARM há segundos) e
+        // `closedCandidateSince` guardava um timestamp de ANTES do clique —
+        // então processFrame() marcava eyesClosed=true de novo já no 1º frame
+        // pós-clique, com closedSince efetivamente herdado do estado antigo.
+        // Resultado: o alarme podia voltar em <500ms, bem abaixo de qualquer
+        // limiar real (drowsinessThresholdMs=1500ms, microsleepAlarmMs=1800ms
+        // no preset padrão) — parecia que o botão "Estou acordado" não fazia
+        // nada. A intenção (não deixar sonolência real ser silenciada com um
+        // toque) continua valendo: se os olhos seguirem fechados, o alarme
+        // ainda volta — só que agora exige closeConfirmFrames novos quadros
+        // fechados e o limiar de duração inteiro de novo, como pretendido.
+        this.belowThresholdStreak = 0;
+        this.closedCandidateSince = null;
         featureExtractor.reset();
         drowsinessModel.reset();
         wsClient.sendEvent(EventType.ALARM_ACKNOWLEDGED);

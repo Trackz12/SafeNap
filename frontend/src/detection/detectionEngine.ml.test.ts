@@ -113,4 +113,25 @@ describe('DetectionEngine — política ML × regras', () => {
         for (let i = 0; i < 25; i++) tick(frame(0.05));
         expect(engine.getState()).toBe('ALARM');
     });
+
+    // Regressão: ackAlarm() não zerava belowThresholdStreak/closedCandidateSince,
+    // dois contadores que já estavam "prontos" de antes do clique (a pessoa
+    // estava em ALARM há segundos, com os olhos fechados). Resultado: o 1º
+    // frame pós-clique já marcava eyesClosed=true de novo com um closedSince
+    // efetivamente herdado do estado antigo — o alarme podia voltar bem abaixo
+    // de qualquer limiar real (visto ao vivo: ~442ms, contra os 1500-1800ms
+    // que o preset padrão exige). Corrigido; este teste trava o reset limpo:
+    // logo após o ack, mesmo com os olhos ainda fechados, tem que passar por
+    // uma janela de reavaliação inteira (não instantânea) antes de re-alarmar.
+    it('após ackAlarm, o alarme NÃO volta em 1-2 frames mesmo com olhos ainda fechados (reset precisa ser limpo)', () => {
+        for (let i = 0; i < 20; i++) tick(frame(0.05));
+        expect(engine.getState()).toBe('ALARM');
+        engine.ackAlarm();
+        expect(engine.getState()).toBe('NORMAL');
+
+        tick(frame(0.05)); // 1 frame pós-ack (100ms): não pode já estar em ALARM
+        expect(engine.getState()).toBe('NORMAL');
+        tick(frame(0.05)); // 2 frames pós-ack (200ms): idem
+        expect(engine.getState()).toBe('NORMAL');
+    });
 });
