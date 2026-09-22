@@ -358,6 +358,17 @@ body::before {
   50%      { opacity: 0.4; }
 }
 
+/* Respiração lenta do halo atrás do gauge principal — sinaliza "monitoramento
+   ao vivo", não decoração (para no ALARM: constante = mais sério que pulsando). */
+@keyframes gauge-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.05); }
+}
+
+.gauge-glow {
+  animation: gauge-breathe 3.2s var(--ease-out) infinite;
+}
+
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -383,6 +394,10 @@ body::before {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
 }
 
 /* ── Skeleton loading ──────────────────────────────── */
@@ -574,27 +589,18 @@ select:focus {
   white-space: nowrap;
 }
 
-/* ── Camera View ──────────────────────────────────── */
+/* ── Camera View ──────────────────────────────────────────────────
+   Altura por clamp (não aspect-ratio): em telas largas/altas (tablet
+   retrato, sidebar colapsada) um 4:3 em 100% de largura vira um vazio
+   preto enorme quando a câmera está desligada — o clamp mantém a área
+   grande o bastante para enquadrar um rosto, mas nunca dominante. */
 .camera-wrapper {
   position: relative;
   width: 100%;
+  height: clamp(240px, 46vh, 420px);
   border-radius: var(--radius-lg);
-  background: #000;
-  aspect-ratio: 4/3;
+  background: radial-gradient(ellipse at center, #131316 0%, #000 72%);
   overflow: hidden;
-}
-
-@supports not (aspect-ratio: 4 / 3) {
-  .camera-wrapper {
-    height: 0;
-    padding-bottom: 75%;
-  }
-  .camera-wrapper .camera-video,
-  .camera-wrapper .camera-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-  }
 }
 
 .camera-video {
@@ -606,6 +612,16 @@ select:focus {
   -webkit-transform: scaleX(-1);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+/* Estado vazio: ensina o que vai aparecer ali (silhueta que o MediaPipe
+   vai rastrear), em vez de um texto solto num retângulo preto. */
+.camera-empty-outline {
+  width: 88px;
+  height: 108px;
+  border-radius: 50% 50% 46% 46%;
+  border: 1.5px dashed var(--border-hover);
+  opacity: 0.5;
 }
 
 .camera-overlay {

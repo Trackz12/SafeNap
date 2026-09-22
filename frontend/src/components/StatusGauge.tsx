@@ -2,12 +2,13 @@ import React from 'react';
 import { useMetrics } from '../detection/useMetrics';
 import type { DetectionState } from '../detection/detectionEngine';
 
-const STATE_CONFIG: Record<DetectionState, { color: string; label: string; sub: string; badge: string }> = {
-    NORMAL:  { color: 'var(--primary)',  label: 'Normal',   sub: 'Monitorando sem sinais de fadiga', badge: 'badge-green' },
-    WARNING: { color: 'var(--warning)',  label: 'Atenção',  sub: 'Sinais de fadiga detectados',      badge: 'badge-yellow' },
-    ALARM:   { color: 'var(--alarm)',    label: 'Perigo',   sub: 'Sonolência confirmada — reaja!',   badge: 'badge-red' },
+const STATE_CONFIG: Record<DetectionState, { color: string; glow: string; label: string; sub: string; badge: string }> = {
+    NORMAL:  { color: 'var(--primary)',  glow: 'var(--primary-glow)',  label: 'Normal',   sub: 'Monitorando sem sinais de fadiga', badge: 'badge-green' },
+    WARNING: { color: 'var(--warning)',  glow: 'var(--warning-glow)',  label: 'Atenção',  sub: 'Sinais de fadiga detectados',      badge: 'badge-yellow' },
+    ALARM:   { color: 'var(--alarm)',    glow: 'var(--alarm-glow)',    label: 'Perigo',   sub: 'Sonolência confirmada — reaja!',   badge: 'badge-red' },
 };
 
+const GAUGE_SIZE = 176; // era 160 — o gauge é o indicador âncora do dashboard, merece mais presença
 const RADIUS = 74;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -48,8 +49,20 @@ export const StatusGauge: React.FC = () => {
     return (
         <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', padding: 'var(--space-5) var(--space-6)' }}>
             {/* Gauge ring */}
-            <div style={{ position: 'relative', width: 160, height: 160, flexShrink: 0 }}>
-                <svg viewBox="0 0 190 190" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+            <div style={{ position: 'relative', width: GAUGE_SIZE, height: GAUGE_SIZE, flexShrink: 0 }}>
+                {/* Halo ambiente por trás do anel — dá ao indicador âncora do dashboard uma
+                    presença que o combina bem no card; a respiração comunica "monitoramento
+                    ao vivo" (para com prefers-reduced-motion, ver index.css). */}
+                <div
+                    className="gauge-glow"
+                    aria-hidden="true"
+                    style={{
+                        position: 'absolute', inset: -20, borderRadius: '50%',
+                        background: `radial-gradient(circle, color-mix(in srgb, ${cfg.color} 22%, transparent) 0%, transparent 72%)`,
+                        pointerEvents: 'none',
+                    }}
+                />
+                <svg viewBox="0 0 190 190" style={{ position: 'relative', transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
                     {/* Track */}
                     <circle
                         cx="95" cy="95" r={RADIUS}
