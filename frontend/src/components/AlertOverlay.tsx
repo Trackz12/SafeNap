@@ -82,78 +82,18 @@ export const AlertOverlay: React.FC = () => {
         };
     }, [isAlarm, isWarning]);
 
-    if (!isAlarm && !isWarning) return null;
+    // WARNING não tem overlay próprio: o header (badge sempre visível, mesmo
+    // com scroll — `position: sticky`) e o StatusGauge no conteúdo principal
+    // já mostram o mesmo estado e o mesmo motivo. Um banner flutuante aqui
+    // era uma TERCEIRA cópia da mesma frase na tela ao mesmo tempo — em
+    // mobile (390px) ele ainda sobrepunha o título do header (mesma faixa de
+    // z-index/posição). O efeito sonoro/vibração de WARNING continua (hooks
+    // acima, independentes do que esta função retorna). Só o ALARM (perigo
+    // concreto) justifica interromper a tela.
+    if (!isAlarm) return null;
 
-    const color = isAlarm ? 'var(--alarm)' : 'var(--warning)';
+    const color = 'var(--alarm)';
     const reasonText = safety.reason ? (REASON_LABELS[safety.reason] ?? safety.reason) : '';
-
-    // WARNING: banner compacto no topo — não bloqueia a interface, sem
-    // blur, sem cobrir a tela. O alerta de "atenção" é informativo; só
-    // o ALARM (perigo concreto) justifica interromper o usuário.
-    // Nota: o estado pode ser WARNING durante a saída de um ALARM
-    // (release gradual) — nesse caso mostra o banner, não o fullscreen.
-    if (!isAlarm) {
-        return (
-            <div
-                role="status"
-                aria-live="polite"
-                className="animate-slide-down"
-                style={{
-                    position: 'fixed',
-                    top: 'var(--space-4)',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    zIndex: 9990,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    padding: 'var(--space-3) var(--space-5)',
-                    borderRadius: 'var(--radius-lg)',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--warning)',
-                    boxShadow: '0 4px 24px var(--warning-glow)',
-                    maxWidth: 'min(92vw, 480px)',
-                }}
-            >
-                <span
-                    style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: '50%',
-                        background: 'var(--warning-dim)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                    }}
-                >
-                    <ShieldAlert size={18} color={color} />
-                </span>
-                <div style={{ textAlign: 'left', minWidth: 0 }}>
-                    <strong style={{
-                        display: 'block',
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 600,
-                        color: 'var(--warning)',
-                        letterSpacing: '-0.01em',
-                    }}>
-                        Atenção
-                    </strong>
-                    <span style={{
-                        display: 'block',
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--text-secondary)',
-                        lineHeight: 1.4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}>
-                        {reasonText || 'Sinais de fadiga detectados'}
-                    </span>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div
