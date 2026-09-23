@@ -73,7 +73,7 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 | `FACE_LOST` | rosto ausente por ≥ 5s |
 | `PROLONGED_CLOSE` | olhos fechados ≥ 700ms |
 | `EAR_TREND` | EAR médio caiu > 18% abaixo do baseline calibrado na última 1min (fase prodrômica — pálpebras pesando gradualmente; medido apenas com olhos abertos) |
-| `SLOW_BLINKS` | ≥ 3 piscadas lentas (400ms–1800ms) por minuto — exige ≥ 30s de sessão antes de valer (evita taxa inflada no início) |
+| `SLOW_BLINKS` | ≥ 4 piscadas lentas (550ms–1800ms; a faixa 400–550ms é zona-morta, não conta como nada) por minuto — exige ≥ 30s de sessão antes de valer (evita taxa inflada no início) |
 
 ### → ALARM (razões)
 | Razão | Condição (preset padrão) |

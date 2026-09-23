@@ -345,3 +345,87 @@ describe('DetectionEngine — processNoFace não deixa o rastreador de micro-son
         expect(engine.getState()).not.toBe('ALARM');
     });
 });
+
+describe('DetectionEngine — SLOW_BLINKS não deve confundir piscada normal com sonolência', () => {
+    // Motivado por relato real de uso: o buzzer/motor de vibração
+    // acionava com os olhos abertos porque qualquer fechamento entre
+    // maxBlinkMs (400ms) e microsleepAlarmMs (1800ms) contava igual como
+    // "piscada lenta", e 3/min já bastava para WARNING (que vibra o
+    // motor no backend). Fix: zona-morta (maxBlinkMs, slowBlinkMinMs) que
+    // não conta como nada, e o limiar de taxa subiu de 3 para 4/min no
+    // preset padrão — ver DetectionConfig.slowBlinkMinMs/slowBlinkRateThreshold.
+    let engine: DetectionEngine;
+    let t = 1_000_000;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        calibrationManager.skipWithDefault();
+        metricsStore.reset();
+        engine = new DetectionEngine();
+        t = 1_000_000;
+        vi.useFakeTimers();
+        vi.setSystemTime(t);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    function tickFrame(ear: number, advanceMs: number): void {
+        t += advanceMs;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(ear));
+    }
+
+    /** Fecha e reabre os olhos com uma duração real controlada (em ms). */
+    function blink(totalClosedMs: number): void {
+        const steps = Math.max(3, Math.round(totalClosedMs / 100));
+        for (let i = 0; i < steps; i++) tickFrame(0.05, 100);
+        tickFrame(0.35, 100); // reabre
+    }
+
+    it('piscada de 450ms (zona-morta: > maxBlinkMs=400, < slowBlinkMinMs=550) não conta como lenta nem dispara aviso', () => {
+        tickFrame(0.35, 100); // inicia a sessão
+        // Repete a piscada ambígua várias vezes — mesmo em quantidade bem
+        // acima de qualquer limiar de taxa razoável, nenhuma delas deveria
+        // ser classificada como "lenta": é zona-morta, não sinal de fadiga.
+        for (let i = 0; i < 6; i++) {
+            blink(450);
+            tickFrame(0.35, 300); // pausa curta entre piscadas
+        }
+        expect(engine.getState()).toBe('NORMAL');
+    });
+
+    it('3 piscadas lentas reais (≥550ms) por minuto NÃO disparam mais SLOW_BLINKS (limiar subiu para 4/min no padrão)', () => {
+        tickFrame(0.35, 100); // inicia a sessão (startedAt)
+        // Avança até perto do fim da janela de observação de 60s antes das
+        // piscadas, para a taxa não ficar inflada por pouco tempo observado.
+        t += 58000;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(0.35));
+
+        for (let i = 0; i < 3; i++) {
+            blink(600); // 600ms >= slowBlinkMinMs (550): conta como lenta
+            tickFrame(0.35, 100);
+        }
+
+        expect(engine.getState()).toBe('NORMAL');
+    });
+
+    it('4 piscadas lentas reais (≥550ms) por minuto disparam SLOW_BLINKS (novo limiar do preset padrão)', () => {
+        tickFrame(0.35, 100);
+        t += 58000;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(0.35));
+
+        for (let i = 0; i < 4; i++) {
+            blink(600);
+            tickFrame(0.35, 100);
+        }
+
+        expect(engine.getState()).toBe('WARNING');
+        expect(metricsStore.get()?.reason).toBe('SLOW_BLINKS');
+    });
+});

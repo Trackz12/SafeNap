@@ -63,6 +63,19 @@ interface DetectionConfig {
     earTrendWindowMs: number;
     /** SEP: mín. de observação antes da taxa de piscadas lentas valer. */
     slowBlinkMinObservationMs: number;
+    /**
+     * Piso de duração para contar como "piscada lenta" (SLOW_BLINKS). Fica
+     * ACIMA de maxBlinkMs de propósito: o intervalo (maxBlinkMs,
+     * slowBlinkMinMs) é uma zona-morta não classificada — nem piscada
+     * normal nem lenta — para absorver a inflação de medição que a
+     * histerese de reabertura (hysteresisFactor) e o filtro de mediana do
+     * EAR introduzem numa piscada rápida real. Sem essa margem, piscadas
+     * fisiologicamente normais cruzavam maxBlinkMs por causa só do atraso
+     * de medição, não por serem realmente lentas.
+     */
+    slowBlinkMinMs: number;
+    /** Piscadas lentas/minuto para SLOW_BLINKS disparar (após slowBlinkMinObservationMs). */
+    slowBlinkRateThreshold: number;
     /** Histerese de release do WARNING (fração abaixo do nível de warn). */
     warningReleaseFraction: number;
 }
@@ -94,6 +107,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendAlarmFraction: 0.40,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
+        slowBlinkMinMs: 700,
+        slowBlinkRateThreshold: 5,
         warningReleaseFraction: 0.80,
     },
     standard: {
@@ -122,6 +137,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendAlarmFraction: 0.35,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
+        slowBlinkMinMs: 550,
+        slowBlinkRateThreshold: 4,
         warningReleaseFraction: 0.80,
     },
     strict: {
@@ -150,6 +167,8 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         earTrendAlarmFraction: 0.30,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
+        slowBlinkMinMs: 450,
+        slowBlinkRateThreshold: 3,
         warningReleaseFraction: 0.80,
     },
 };
@@ -477,7 +496,7 @@ export class DetectionEngine {
             // SEP (Slow Eye-closure Phase): piscada LENTA (acima do normal mas
             // abaixo de microsleep) é marcador precoce de fadiga — a pálpebra
             // desce devagar antes de qualquer fechamento crítico.
-            if (duration > this.config.maxBlinkMs && duration < this.config.microsleepAlarmMs) {
+            if (duration >= this.config.slowBlinkMinMs && duration < this.config.microsleepAlarmMs) {
                 this.slowBlinkTimestamps.push(now);
             }
             if (duration >= this.config.drowsinessThresholdMs) {
@@ -648,7 +667,7 @@ export class DetectionEngine {
         // SEP: taxa de piscadas lentas nos últimos 60s. >=3 lentas/min é
         // marcador precoce estabelecido de fadiga (pálpebra pesando).
         const slowBlinkRate = this.slowBlinkRateAt(now);
-        const slowBlinksActive = slowBlinkRate >= 3;
+        const slowBlinksActive = slowBlinkRate >= this.config.slowBlinkRateThreshold;
 
         let ruleWarn: WarningReason | null = null;
         if (perclos >= this.config.perclosWarningLevel) ruleWarn = 'PERCLOS';
@@ -801,7 +820,7 @@ export class DetectionEngine {
                 closedForMs >= this.config.warnCloseMs * releaseFactor ||
                 (trendFraction !== null &&
                     trendFraction >= this.config.earTrendWarnFraction * releaseFactor) ||
-                slowBlinkRate >= 3 * releaseFactor;
+                slowBlinkRate >= this.config.slowBlinkRateThreshold * releaseFactor;
             if (!stillWarn) {
                 this.state = 'NORMAL';
                 this.reason = null;
@@ -821,8 +840,10 @@ export class DetectionEngine {
      */
 /**
      * Taxa de piscadas LENTAS por minuto (janela 60s). Piscada lenta =
-     * fechamento entre maxBlinkMs e microsleepAlarmMs: nem piscada normal
-     * nem micro-sono — a "pálpebra pesando" clássica da fase precoce.
+     * fechamento entre slowBlinkMinMs e microsleepAlarmMs: nem piscada
+     * normal (há uma zona-morta entre maxBlinkMs e slowBlinkMinMs, ver
+     * DetectionConfig.slowBlinkMinMs) nem micro-sono — a "pálpebra
+     * pesando" clássica da fase precoce.
      */
     private slowBlinkRateAt(now: number): number {
         const windowStart = now - 60000;
