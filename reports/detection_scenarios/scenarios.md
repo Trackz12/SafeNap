@@ -2,14 +2,14 @@
 
 Cenários sintéticos executados contra o DetectionEngine real (não uma reimplementação), com relógio controlado (vi.setSystemTime) para atingir durações exatas. Verdade-fundamental atribuída pelos autores com base nos limiares documentados em docs/DETECTION.md — isto é verificação de especificação, não validação com dados humanos reais.
 
-**15/15** cenários classificados conforme a verdade-fundamental atribuída.
+**16/16** cenários classificados conforme a verdade-fundamental atribuída.
 
 ## Matriz de confusão (binária: alerta = WARNING ou ALARM vs. sem alerta = NORMAL)
 
 | | Previsto: alerta | Previsto: sem alerta |
 |---|---|---|
 | **Real: alerta** | VP=7 | FN=0 |
-| **Real: sem alerta** | FP=0 | VN=8 |
+| **Real: sem alerta** | FP=0 | VN=9 |
 
 Precisão: **1.000** · Revocação (recall): **1.000** · F1: **1.000**
 
@@ -27,8 +27,9 @@ Precisão: **1.000** · Revocação (recall): **1.000** · F1: **1.000**
 | recuperacao_apos_alarme | Reabertura sustentada dos olhos após ALARM (EYES_CLOSED_DURATION) | NORMAL | NORMAL | — | ✅ |
 | bocejo_confirmado_500ms | Boca aberta (aspect 0.75) sustentada por 500ms | WARNING | WARNING | YAWN | ✅ |
 | bocejo_nao_confirmado_200ms | Boca aberta por apenas 200ms (< yawnMinMs=400ms) | NORMAL | NORMAL | — | ✅ |
-| queda_cabeca_confirmada_2500ms | Nariz abaixo do baseline+margem sustentado por 2500ms | WARNING | WARNING | HEAD_DROP | ✅ |
+| queda_cabeca_confirmada_2500ms | Nariz abaixo do baseline+margem sustentado por 2500ms, com pálpebra caindo junto | WARNING | WARNING | HEAD_DROP | ✅ |
 | queda_cabeca_curta_1000ms | Queda de cabeça por apenas 1000ms (< headDropMinMs=2000ms) | NORMAL | NORMAL | — | ✅ |
+| queda_cabeca_com_olhos_alertas_2500ms | Nariz abaixo do baseline+margem por 2500ms, mas com olhos bem abertos (ear=0.35) — sem corroboração ocular | NORMAL | NORMAL | — | ✅ |
 | rosto_ausente_confirmado_6000ms | Rosto ausente por 6000ms | WARNING | WARNING | FACE_LOST | ✅ |
 | rosto_ausente_curto_2000ms | Rosto ausente por apenas 2000ms (< faceLostWarnMs=5000ms) | NORMAL | NORMAL | — | ✅ |
 | tendencia_declinio_gradual | EAR=0.25 sustentado (declínio de 28,6% vs. baseline 0.35), olhos nunca fecham | WARNING | WARNING | EAR_TREND | ✅ |

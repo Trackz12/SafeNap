@@ -15,13 +15,27 @@ disparar alerta mesmo que a camera nao tenha detectado nada, e vice-versa.
 Isso e uma modernizacao deliberada do firmware historico, que fazia essa
 mesma fusao (Python + FSR) dentro do proprio Arduino, com limiar fixo
 (`fsrLimite = 220`) e um corte automatico do alarme apos 10s
-(`tempoMaximoAlerta`) independente de a mao ter voltado ao volante. Este
-modulo NAO reproduz o corte automatico: sonolencia real nao tem prazo de
-validade, e desligar um alarme de seguranca sozinho — sem confirmacao do
-usuario — seria um regresso de seguranca. A tolerancia de queda sustentada
-antes do alarme (1s) e a mesma usada no firmware historico
-(`tempoTolerancia`), agora com um estagio adicional de aviso mais cedo
-(500ms) que o sistema original nao tinha.
+(`tempoMaximoAlerta`) independente de a mao ter voltado ao volante. A
+tolerancia de queda sustentada antes do alarme (1s) e a mesma usada no
+firmware historico (`tempoTolerancia`), agora com um estagio adicional de
+aviso mais cedo (500ms) que o sistema original nao tinha.
+
+Diferente do firmware historico (10s) e de versoes anteriores deste
+modulo (sem corte algum — sonolencia real nao tem prazo de validade, e
+esse continua sendo o comportamento nos primeiros PROLONGED_LOSS_S
+segundos), a partir de PROLONGED_LOSS_S de queda ininterrupta o sinal de
+garra volta sozinho a NORMAL. Motivo: este e um sensor FISICO
+compartilhado por varias pessoas ao longo de um dia de demonstracao,
+ligado direto no backend — independente de qualquer sessao de navegador
+estar aberta. Sem esse teto, o alarme ficava ligado indefinidamente
+sempre que ninguem estivesse segurando o sensor (inclusive com o
+navegador ja fechado), porque o proprio sinal de garra renova o watchdog
+do SafetyManager a cada leitura (ver comentario em update()). O teto e
+deliberadamente bem maior que o antigo corte de 10s do firmware, para
+nao ser confundido com aquele regresso de seguranca — ele existe para
+"ninguem esta testando agora", nao para tolerar sonolencia real
+prolongada. Uma implantacao real em veiculo (fora do escopo atual,
+trabalho futuro) deve reavaliar se esse teto ainda faz sentido.
 
 Calibracao: a baseline e uma media movel exponencial (EMA) que so anda
 enquanto a mao esta detectada no volante ("gripped"); ela congela assim
@@ -60,6 +74,12 @@ class GripMonitor:
     # estagio de aviso adicional que o sistema original nao tinha.
     WARNING_MS = 500.0
     ALARM_MS = 1000.0
+
+    # Teto de "ninguem esta segurando o sensor" -- ver docstring do modulo.
+    # Bem maior que ALARM_MS de proposito: precisa ser claramente "sensor
+    # abandonado entre testes", nunca confundivel com uma mao que apenas
+    # relaxou o aperto por um instante.
+    PROLONGED_LOSS_S = 30.0
 
     def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._clock = clock
@@ -153,9 +173,13 @@ class GripMonitor:
     def _evaluate_state(self, now: float) -> SafetyState:
         if self._gripped:
             return SafetyState.NORMAL
-        # Sem corte automatico: enquanto a queda persistir, o estado
-        # permanece ALARM indefinidamente (ver docstring do modulo).
         lost_for_s = now - (self._lost_since or now)
+        # Teto de "ninguem esta segurando o sensor" -- ver docstring do
+        # modulo e PROLONGED_LOSS_S. Verificado ANTES do ALARM_MS de
+        # proposito: se algum dia PROLONGED_LOSS_S <= ALARM_MS numa config
+        # customizada, o teto ainda vence.
+        if lost_for_s >= self.PROLONGED_LOSS_S:
+            return SafetyState.NORMAL
         if lost_for_s >= self.ALARM_MS / 1000.0:
             return SafetyState.ALARM
         if lost_for_s >= self.WARNING_MS / 1000.0:

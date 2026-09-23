@@ -276,21 +276,38 @@ describe('Bateria de cenários — bocejo', () => {
 });
 
 describe('Bateria de cenários — queda de cabeça', () => {
-    it('queda de cabeça confirmada (~2500ms)', () => {
+    it('queda de cabeça confirmada (~2500ms), COM pálpebra caindo junto (ear=0.22: abaixo de threshold*hysteresisFactor=0.2415, mas acima do threshold=0.21 — não fecha por completo, só não está "alerta")', () => {
         const clock = makeClock(4_000_000);
         const engine = new DetectionEngine();
         // baseline nose-drop calibrado = 0.30; margem padrão = 0.07 → dispara acima de 0.37.
-        clock.advance(1); engine.processFrame(makeFrame(0.35, 0.2, 0.45));
-        clock.advance(2499); engine.processFrame(makeFrame(0.35, 0.2, 0.45)); // ~2500ms > headDropMinMs=2000ms
-        record('queda_cabeca_confirmada_2500ms', 'Nariz abaixo do baseline+margem sustentado por 2500ms', 'WARNING', engine);
+        // Queda de cabeça por sonolência real vem com o olho também caindo —
+        // ear=0.22 fica na zona ambígua (não "fechado" pelo threshold, mas
+        // também não "alerta"), corroborando HEAD_DROP (eyesLookAlert=false)
+        // sem disparar EYES_CLOSED_DURATION/PROLONGED_CLOSE por tabela.
+        clock.advance(1); engine.processFrame(makeFrame(0.22, 0.2, 0.45));
+        clock.advance(2499); engine.processFrame(makeFrame(0.22, 0.2, 0.45)); // ~2500ms > headDropMinMs=2000ms
+        record('queda_cabeca_confirmada_2500ms', 'Nariz abaixo do baseline+margem sustentado por 2500ms, com pálpebra caindo junto', 'WARNING', engine);
     });
 
-    it('queda de cabeça curta (~1000ms, não confirmada)', () => {
+    it('queda de cabeça curta (~1000ms, não confirmada mesmo com pálpebra caindo — falha por duração)', () => {
         const clock = makeClock(4_100_000);
         const engine = new DetectionEngine();
-        clock.advance(1); engine.processFrame(makeFrame(0.35, 0.2, 0.45));
-        clock.advance(999); engine.processFrame(makeFrame(0.35, 0.2, 0.45)); // ~1000ms < headDropMinMs=2000ms
+        clock.advance(1); engine.processFrame(makeFrame(0.22, 0.2, 0.45));
+        clock.advance(999); engine.processFrame(makeFrame(0.22, 0.2, 0.45)); // ~1000ms < headDropMinMs=2000ms
         record('queda_cabeca_curta_1000ms', 'Queda de cabeça por apenas 1000ms (< headDropMinMs=2000ms)', 'NORMAL', engine);
+    });
+
+    // Regressão de falso-positivo real (relato de uso): olhar pro
+    // painel/celular por >= headDropMinMs, com os olhos bem abertos o tempo
+    // todo (ear=0.35, bem acima de threshold*hysteresisFactor=0.2415), NÃO
+    // pode disparar HEAD_DROP — só a posição do nariz não basta, precisa de
+    // corroboração ocular (ver eyesLookAlert em detectionEngine.ts).
+    it('cabeça baixa por 2500ms com olhos bem abertos (olhando painel/celular, não sonolência) NÃO dispara HEAD_DROP', () => {
+        const clock = makeClock(4_200_000);
+        const engine = new DetectionEngine();
+        clock.advance(1); engine.processFrame(makeFrame(0.35, 0.2, 0.45));
+        clock.advance(2499); engine.processFrame(makeFrame(0.35, 0.2, 0.45));
+        record('queda_cabeca_com_olhos_alertas_2500ms', 'Nariz abaixo do baseline+margem por 2500ms, mas com olhos bem abertos (ear=0.35) — sem corroboração ocular', 'NORMAL', engine);
     });
 });
 

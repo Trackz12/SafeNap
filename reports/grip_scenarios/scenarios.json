@@ -1,11 +1,11 @@
 {
   "methodology": "Cenarios sinteticos executados contra o GripMonitor real (nao uma reimplementacao), com relogio controlado. Verdade-fundamental atribuida pelos autores com base nos limiares documentados em docs/HARDWARE.md -- verificacao de especificacao, nao validacao com dados humanos reais (nao ha dataset publico de pressao de empunhadura veicular disponivel, diferente da visao computacional).",
-  "total_scenarios": 10,
-  "correct": 10,
+  "total_scenarios": 11,
+  "correct": 11,
   "confusion_matrix_binary": {
     "tp": 4,
     "fp": 0,
-    "tn": 6,
+    "tn": 7,
     "fn": 0,
     "precision": 1.0,
     "recall": 1.0,
@@ -69,10 +69,17 @@
       "correct": true
     },
     {
-      "name": "alarme_sustentado_sem_autocorte",
-      "description": "Queda mantida por 30s — sem corte automático",
+      "name": "alarme_sustentado_25s_ainda_ativo",
+      "description": "Queda mantida por 25s — ainda bem além do corte de 10s do firmware antigo",
       "ground_truth": "ALARM",
       "predicted": "ALARM",
+      "correct": true
+    },
+    {
+      "name": "alarme_prolongado_libera_sozinho",
+      "description": "Queda mantida além de PROLONGED_LOSS_S (30s) — libera para NORMAL sozinho",
+      "ground_truth": "NORMAL",
+      "predicted": "NORMAL",
       "correct": true
     },
     {

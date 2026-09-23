@@ -429,3 +429,64 @@ describe('DetectionEngine — SLOW_BLINKS não deve confundir piscada normal com
         expect(metricsStore.get()?.reason).toBe('SLOW_BLINKS');
     });
 });
+
+describe('DetectionEngine — não avalia com calibração inválida mesmo depois que isCalibrating vira false', () => {
+    // Regressão: abort() (calibração falhou por timeout/gap) já zera
+    // isCalibrating, mas isso não significa que há um threshold válido —
+    // significa só que a TENTATIVA acabou. processFrame() checava apenas
+    // `!isCalibrating`, então na janela entre a falha e o usuário escolher
+    // "Tentar de novo" ou "Pular" na tela de erro, a detecção rodava
+    // escondida contra o que estivesse em closedEyeThreshold (possivelmente
+    // a calibração de outra pessoa, de uma sessão anterior no mesmo
+    // dispositivo). Fix: processFrame() agora exige canEvaluate() também,
+    // igual a processNoFace() já fazia.
+    let engine: DetectionEngine;
+    let t = 1_000_000;
+
+    beforeEach(() => {
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+        engine = new DetectionEngine();
+        t = 1_000_000;
+        vi.useFakeTimers();
+        vi.setSystemTime(t);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        calibrationManager.clearCalibration();
+        metricsStore.reset();
+    });
+
+    function tickFrame(ear: number, advanceMs: number): void {
+        t += advanceMs;
+        vi.setSystemTime(t);
+        engine.processFrame(makeFrame(ear));
+    }
+
+    it('calibração que falha (gap: olhos abertos/fechados quase iguais) deixa isCalibrating=false MAS não libera avaliação', () => {
+        calibrationManager.settleDelayMs = 0;
+        calibrationManager.startCalibration();
+        // Fase aberta e "fechada" com o MESMO EAR -> gap insuficiente,
+        // finishCalibration() rejeita com outcome='gap'.
+        for (let i = 0; i < 25; i++) calibrationManager.addSample(0.30, 0.30);
+        calibrationManager.advanceToClosedPhase();
+        for (let i = 0; i < 25; i++) calibrationManager.addSample(0.30);
+        calibrationManager.finishCalibration();
+
+        expect(calibrationManager.isCalibrating).toBe(false);
+        expect(calibrationManager.getOutcome()).toBe('gap');
+        expect(calibrationManager.canEvaluate()).toBe(false);
+
+        // Olhos bem fechados por tempo mais que suficiente pra alarmar SE a
+        // avaliação estivesse rodando — mas não deve, sem calibração válida.
+        for (let i = 0; i < 20; i++) tickFrame(0.05, 100);
+        expect(engine.getState()).toBe('NORMAL');
+
+        // Depois que o usuário escolhe "Pular" na tela de erro, a avaliação
+        // passa a funcionar normalmente.
+        calibrationManager.skipWithDefault();
+        for (let i = 0; i < 20; i++) tickFrame(0.05, 100);
+        expect(engine.getState()).not.toBe('NORMAL');
+    });
+});

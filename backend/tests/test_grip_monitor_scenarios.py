@@ -157,16 +157,34 @@ def test_sem_calibracao_nao_avalia():
     record("sem_calibracao", "Leitura baixa isolada sem baseline calibrada ainda", SafetyState.NORMAL, monitor)
 
 
-def test_alarme_sustentado_nao_se_autolibera():
-    """Regressão: o alarme deve permanecer mesmo muito além do limiar,
-    sem corte automático por tempo (ver docs/HARDWARE.md, item 4)."""
+def test_alarme_sustentado_nao_se_autolibera_cedo():
+    """Regressão: o alarme deve permanecer bem além do corte de 10s do
+    firmware histórico — mas não pra sempre (ver docs/HARDWARE.md, item 4:
+    a partir de PROLONGED_LOSS_S=30s ele libera sozinho, cenário coberto
+    em `test_alarme_prolongado_libera_sozinho` abaixo)."""
     clock = FakeClock()
     monitor = GripMonitor(clock=clock)
     calibrate(monitor, clock)
     monitor.update(DROPPED_PRESSURE)
-    clock.advance(30.0)  # bem além dos 10s do firmware histórico
+    clock.advance(25.0)  # bem além dos 10s do firmware histórico, ainda < PROLONGED_LOSS_S
     monitor.update(DROPPED_PRESSURE)
-    record("alarme_sustentado_sem_autocorte", "Queda mantida por 30s — sem corte automático", SafetyState.ALARM, monitor)
+    record("alarme_sustentado_25s_ainda_ativo", "Queda mantida por 25s — ainda bem além do corte de 10s do firmware antigo", SafetyState.ALARM, monitor)
+
+
+def test_alarme_prolongado_libera_sozinho():
+    """Regressão (pedido do usuário): sensor físico compartilhado por
+    várias pessoas num dia de demonstração, sem ninguém segurando, ficava
+    alarmando pra sempre. A partir de PROLONGED_LOSS_S de queda
+    ininterrupta, libera sozinho — sem precisar de confirmação manual."""
+    clock = FakeClock()
+    monitor = GripMonitor(clock=clock)
+    calibrate(monitor, clock)
+    monitor.update(DROPPED_PRESSURE)
+    clock.advance(1.1)
+    monitor.update(DROPPED_PRESSURE)
+    clock.advance(GripMonitor.PROLONGED_LOSS_S)
+    monitor.update(DROPPED_PRESSURE)
+    record("alarme_prolongado_libera_sozinho", "Queda mantida além de PROLONGED_LOSS_S (30s) — libera para NORMAL sozinho", SafetyState.NORMAL, monitor)
 
 
 def test_reset_apos_reconexao_volta_a_normal():

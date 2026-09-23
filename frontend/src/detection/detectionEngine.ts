@@ -506,7 +506,14 @@ export class DetectionEngine {
         }
 
         this.processYawn(frame.mouthAspect, now);
-        this.processHeadDrop(frame.noseDropRatio, now);
+        // Corrobora queda de cabeça com o estado do olho: alguém olhando pra
+        // baixo alerta (painel, celular) mantém os olhos bem abertos, ao
+        // passo que a queda de cabeça por sonolência real vem sempre com a
+        // pálpebra caindo junto (é o mesmo relaxamento muscular). Sem essa
+        // checagem, olhar pro painel por >= headDropMinMs já bastava para
+        // WARNING/HEAD_DROP mesmo com ear bem acima do threshold.
+        const eyesLookAlert = ear > threshold * this.config.hysteresisFactor;
+        this.processHeadDrop(frame.noseDropRatio, now, eyesLookAlert);
 
         // MICROSLEEP: rastreia fechamento agudo e SUSTENTADO (eye bem fechado),
         // independente do PERCLOS acumulado de 60s (que dilui eventos agudos).
@@ -530,7 +537,13 @@ export class DetectionEngine {
             }
         }
 
-        if (!calibrationManager.isCalibrating) {
+        // canEvaluate() (não só !isCalibrating) evita avaliar com um
+        // threshold inválido/desatualizado na janela entre a calibração
+        // falhar (timeout/gap — abort() já zera isCalibrating) e o usuário
+        // escolher "Tentar de novo" ou "Pular" na tela de erro do wizard;
+        // sem isso, a detecção rodava escondida ali com o que estivesse em
+        // closedEyeThreshold. Mesmo gate que processNoFace() já usava.
+        if (!calibrationManager.isCalibrating && calibrationManager.canEvaluate()) {
             const closedForMs = this.eyesClosed && this.closedSince !== null
                 ? now - this.closedSince
                 : 0;
@@ -616,7 +629,7 @@ export class DetectionEngine {
         }
     }
 
-    private processHeadDrop(noseDropRatio: number, now: number): void {
+    private processHeadDrop(noseDropRatio: number, now: number, eyesLookAlert: boolean): void {
         const baseline = calibrationManager.getBaselineNoseDrop();
         if (baseline === null) {
             this.headDropped = false;
@@ -627,7 +640,10 @@ export class DetectionEngine {
         const droppedNow = noseDropRatio > baseline + this.config.headDropMargin;
         if (droppedNow) {
             if (this.headDropSince === null) this.headDropSince = now;
-            if (!this.headDropped && now - this.headDropSince >= this.config.headDropMinMs) {
+            // Só confirma HEAD_DROP se os olhos também não parecem alertas no
+            // momento da confirmação: exige corroboração ocular, não só a
+            // posição do nariz (ver comentário no call site em processFrame).
+            if (!this.headDropped && !eyesLookAlert && now - this.headDropSince >= this.config.headDropMinMs) {
                 this.headDropped = true;
                 wsClient.sendEvent(EventType.HEAD_DROPPED, { noseDropRatio, baseline });
             }

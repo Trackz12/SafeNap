@@ -134,6 +134,20 @@ class TestDetectorNegotiation:
         sent = json.loads(ws.send_text.call_args[0][0])
         assert sent["type"] == "DETECTOR_ASSIGNED"
 
+    async def test_claim_resets_grip_monitor_baseline(self):
+        """Regressão: a baseline do GripMonitor só era resetada em
+        queda/reconexão serial, nunca ao trocar de detector — a força de
+        aperto de quem calibrou primeiro continuava valendo para a próxima
+        pessoa que reivindicasse o papel (ex.: demonstração com várias
+        pessoas testando o mesmo dia, sensor físico único e persistente)."""
+        manager = ConnectionManager()
+        ws = make_ws()
+        await manager.connect(ws)
+
+        with patch("app.websocket.manager.grip_monitor") as mock_grip:
+            await manager.handle_message(make_msg("DETECTOR_CLAIM", "device-1"), ws)
+            mock_grip.reset.assert_called_once()
+
     async def test_second_device_gets_taken(self):
         manager = ConnectionManager()
         ws1, ws2 = make_ws(), make_ws()
