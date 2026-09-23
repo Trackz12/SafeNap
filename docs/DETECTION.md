@@ -1,5 +1,71 @@
 # Engine de Detecção (Detection Engine)
 
+## Arquitetura (refatorada em 2026-09-23 — auditoria completa em `.ai/memory.md`)
+
+`DetectionEngine` é hoje um **orquestrador fino**, não mais uma classe de
+~900 linhas fazendo tudo. Cada sinal tem um módulo dedicado, testável
+isoladamente (com relógio injetável — `temporal/clock.ts` — em vez de
+`Date.now()` espalhado):
+
+```
+frontend/src/detection/
+├── detectionEngine.ts        orquestrador: liga os detectores, aplica a
+│                              histerese de entrada/saída de estado
+│                              (depende do estado anterior — não é
+│                              responsabilidade de nenhum detector nem da
+│                              fusão), publica métricas e efeitos colaterais
+├── eye/
+│   ├── eyeStateDetector.ts    OPEN/CLOSING/CLOSED/OPENING/UNKNOWN
+│   ├── blinkDetector.ts       classifica piscada normal/lenta, taxa por minuto
+│   ├── perclosTracker.ts      PERCLOS com denominador de tempo VÁLIDO observado
+│   └── microsleepDetector.ts  fechamento agudo+sustentado, com cooldown
+├── head/headDropDetector.ts   queda de cabeça, com corroboração ocular
+├── mouth/yawnDetector.ts      bocejo
+├── temporal/
+│   ├── clock.ts               Clock injetável (SystemClock + FakeClock p/ testes)
+│   └── earTrendTracker.ts     tendência de declínio do EAR (fase prodrômica)
+├── vision/visionQuality.ts    tipos GOOD/DEGRADED/LOST, Signal<T> (não usados
+│                              ainda pelo pipeline principal — ver NEEDS VALIDATION)
+└── fusion/signalFusion.ts     fonte ÚNICA de evidência→decisão (ver abaixo)
+```
+
+**Antes**: existiam DOIS mecanismos de decisão coexistindo —
+`DetectionEngine.evaluate()` decidia por uma cadeia if/else de prioridade
+fixa (chamando `ml/mlReasons.ts`), e só quando ela não decidia nada é que
+`signalFusion.ts` (scoring contínuo) entrava como fallback. **Depois**: um
+único módulo (`fusion/signalFusion.ts`) com 3 camadas explícitas:
+
+1. **Indicadores fortes** (gatilho determinístico, prioridade fixa —
+   preservada da cadeia original, não redecidida): MICROSLEEP,
+   EYES_CLOSED_DURATION, PERCLOS_CRITICAL (alarme); PERCLOS, YAWN,
+   HEAD_DROP, FACE_LOST, PROLONGED_CLOSE, EAR_TREND, SLOW_BLINKS (aviso).
+2. **ML corroborativo**: nunca origina ALARM sozinho — só escala para
+   ML_ALARM quando há uma regra de aviso fisiológica ativa (FACE_LOST não
+   conta como corroboração).
+3. **Suporte (fallback contínuo)**: quando nenhum indicador forte disparou
+   sozinho, sinais fracos (bocejo leve, cabeça caindo, tendência de EAR,
+   PERCLOS moderado, ML) somam evidência ponderada em vez de competir.
+
+O resultado (`FusionResult`) é explicável: `primaryReason` (o que
+disparou) + `contributingSignals` (todos os sinais ativos no frame, não só
+o vencedor) — pensado para debug, UI e logs, não só a decisão binária.
+
+**Mudança de comportamento deliberada** (única desta refatoração; tudo o
+resto preserva o comportamento anterior byte a byte, verificado pelos 227
+testes de ponta-a-ponta que já existiam): o **PERCLOS agora usa tempo
+VÁLIDO observado como denominador**, não mais uma janela de relógio fixa de
+60s. Perda de rosto (oclusão, GPU engasgando, olhar pro retrovisor) reduz o
+denominador em vez de silenciosamente contar como "olhos abertos" — ver
+`eye/perclosTracker.ts` para o racional completo e o teste que documenta
+ANTES/DEPOIS.
+
+**NEEDS VALIDATION** (parâmetros que continuam sem base experimental —
+sinalizados no código, não apresentados como "corretos"): o clamp do
+threshold de calibração `[0.12, 0.45]` e o fator 0.5 (média simples) entre
+EAR aberto/fechado; os pesos de `WEIGHTS` na fusão contínua (`fusion/signalFusion.ts`);
+os graus de `VisionQuality.DEGRADED` (hoje `frameAnalyzer.ts` só distingue
+"confiável" de "descartado", não uma gradação intermediária).
+
 A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de vídeo sai do cliente). O MediaPipe FaceLandmarker extrai 478 pontos faciais; a partir deles são calculados, por frame, quatro sinais independentes que alimentam a máquina de estados.
 
 > **Segunda fonte de sinal (fora do navegador):** o sensor de pressão FSR-402
@@ -32,6 +98,8 @@ A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de v
 Proporção do tempo em que os olhos ficaram fechados dentro de uma janela deslizante de **60 segundos** (aproximação da métrica PERCLOS P80). É a base do escalonamento de severidade e muito mais robusta que avaliar apenas um episódio contínuo.
 
 **Anti-falso-positivo:** segmentos com duração menor que `perclosIgnoreMs` (400ms — duração típica de uma piscada) são **excluídos do PERCLOS**. Piscadas normais continuam sendo contadas, mas não inflam a métrica de sonolência.
+
+**Denominador = tempo VÁLIDO observado, não janela de relógio fixa** (desde 2026-09-23, ver `eye/perclosTracker.ts`). Antes, o denominador era sempre 60000ms de relógio, mesmo com boa parte da janela sem rosto observável (oclusão, GPU engasgando, olhar pro retrovisor) — esse tempo silenciosamente contava como "olhos abertos", diluindo o PERCLOS bem no momento em que a confiança no dado deveria cair. Agora: `perclos = closedMs / (60000 - tempoSemRostoNaJanela)`. Em sessões com pouca perda de rosto o número não muda; em sessões com perda de rosto frequente, o PERCLOS reportado pode ser mais alto que antes — é a correção pretendida.
 
 ## Micro-sono (MICROSLEEP) — detector dedicado de evento agudo
 
