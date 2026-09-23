@@ -60,6 +60,47 @@ describe('calibrationManager - estado inicial', () => {
         calibrationManager.clearCalibration();
         expect(calibrationManager.canEvaluate()).toBe(false);
     });
+
+    // Regressão: o CalibrationWizard chama startCalibration() em segundo
+    // plano assim que abre, ANTES de qualquer clique do usuário. Se a
+    // pessoa clicar "Pular" rápido (comum num dia de demonstração com
+    // várias pessoas testando), skipWithDefault() precisa encerrar essa
+    // coleta em andamento na hora -- sem isso, isCalibrating continuava
+    // true por vários segundos (até a coleta de fundo completar ou dar
+    // timeout sozinha), e processFrame() só chama evaluate() quando
+    // `!isCalibrating`: a detecção ficava muda mesmo com "Pular" já clicado.
+    it('skipWithDefault encerra na hora uma calibração ainda em andamento (isCalibrating não pode continuar true)', () => {
+        calibrationManager.startCalibration();
+        expect(calibrationManager.isCalibrating).toBe(true);
+
+        calibrationManager.skipWithDefault();
+
+        expect(calibrationManager.isCalibrating).toBe(false);
+        expect(calibrationManager.phase).toBe('idle');
+        expect(calibrationManager.canEvaluate()).toBe(true);
+    });
+
+    // Regressão: threshold/baselineEar/baselineNoseDrop persistem em
+    // localStorage entre sessões no MESMO navegador. Num laptop de
+    // demonstração usado por várias pessoas, "Pular" precisa cair num
+    // padrão NEUTRO -- não silenciosamente continuar usando a calibração
+    // (olhos e postura) de quem usou o dispositivo por último.
+    it('skipWithDefault reseta threshold/baseline para o padrão neutro, mesmo com uma calibração anterior cacheada', () => {
+        calibrationManager.settleDelayMs = 0;
+        calibrationManager.startCalibration();
+        fillSamples(0.35, MIN_CALIBRATION_SAMPLES);
+        calibrationManager.advanceToClosedPhase();
+        fillSamples(0.07, MIN_CALIBRATION_SAMPLES);
+        calibrationManager.finishCalibration();
+        expect(calibrationManager.getThreshold()).not.toBe(DEFAULT_THRESHOLD);
+        expect(calibrationManager.getBaseline()).not.toBeNull();
+
+        calibrationManager.skipWithDefault();
+
+        expect(calibrationManager.getThreshold()).toBe(DEFAULT_THRESHOLD);
+        expect(calibrationManager.getBaseline()).toBeNull();
+        expect(calibrationManager.getBaselineNoseDrop()).toBeNull();
+    });
 });
 
 describe('calibrationManager - fluxo guiado automático', () => {

@@ -1,12 +1,12 @@
 {
   "methodology": "Cenários sintéticos executados contra o DetectionEngine real (não uma reimplementação), com relógio controlado (vi.setSystemTime) para atingir durações exatas. Verdade-fundamental atribuída pelos autores com base nos limiares documentados em docs/DETECTION.md — isto é verificação de especificação, não validação com dados humanos reais.",
-  "totalScenarios": 15,
-  "correct": 15,
+  "totalScenarios": 16,
+  "correct": 16,
   "accuracy": 1,
   "confusionMatrixBinary": {
     "tp": 7,
     "fp": 0,
-    "tn": 8,
+    "tn": 9,
     "fn": 0,
     "precision": 1,
     "recall": 1,
@@ -95,7 +95,7 @@
     },
     {
       "name": "queda_cabeca_confirmada_2500ms",
-      "description": "Nariz abaixo do baseline+margem sustentado por 2500ms",
+      "description": "Nariz abaixo do baseline+margem sustentado por 2500ms, com pálpebra caindo junto",
       "groundTruth": "WARNING",
       "predicted": "WARNING",
       "predictedReason": "HEAD_DROP",
@@ -104,6 +104,14 @@
     {
       "name": "queda_cabeca_curta_1000ms",
       "description": "Queda de cabeça por apenas 1000ms (< headDropMinMs=2000ms)",
+      "groundTruth": "NORMAL",
+      "predicted": "NORMAL",
+      "predictedReason": null,
+      "correct": true
+    },
+    {
+      "name": "queda_cabeca_com_olhos_alertas_2500ms",
+      "description": "Nariz abaixo do baseline+margem por 2500ms, mas com olhos bem abertos (ear=0.35) — sem corroboração ocular",
       "groundTruth": "NORMAL",
       "predicted": "NORMAL",
       "predictedReason": null,

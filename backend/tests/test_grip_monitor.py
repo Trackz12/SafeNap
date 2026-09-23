@@ -140,20 +140,45 @@ class TestDropDetection:
         assert monitor.status()["calibrated"] is False
         mock_safety.process_grip_signal.assert_not_called()
 
-    def test_no_automatic_alarm_cutoff(self):
+    def test_alarm_persists_well_beyond_old_firmware_cutoff(self):
         """Diferente do firmware historico (`tempoMaximoAlerta` desligava o
         alerta apos 10s mesmo sem a mao voltar ao volante), o GripMonitor
-        atual NAO limita a duracao do alarme: enquanto a queda persistir, o
-        estado continua ALARM indefinidamente — desligar um alerta de
-        seguranca sozinho, sem confirmacao do usuario, seria um regresso."""
+        nao desliga no primeiro sinal de queda sustentada: aos 25s (bem
+        alem dos 10s do firmware antigo, ainda dentro do teto de
+        PROLONGED_LOSS_S=30s) o estado continua ALARM."""
         clock = FakeClock()
         monitor = GripMonitor(clock=clock)
         with patch("app.safety.grip_monitor.safety_manager"):
             calibrate(monitor, clock)
             monitor.update(DROPPED_PRESSURE)
-            clock.advance(30.0)  # bem alem dos 10s do firmware antigo
+            clock.advance(25.0)  # bem alem dos 10s do firmware antigo
             monitor.update(DROPPED_PRESSURE)
         assert monitor.status()["state"] == SafetyState.ALARM
+
+    def test_prolonged_loss_clears_to_normal_after_timeout(self):
+        """Regressao (pedido do usuario): um sensor FISICO compartilhado
+        por varias pessoas num dia de demonstracao, sem ninguem segurando,
+        ficava alarmando pra sempre (ver docstring do modulo — o proprio
+        sinal de garra renova o watchdog do SafetyManager a cada leitura,
+        entao nem a inatividade desliga sozinho). A partir de
+        PROLONGED_LOSS_S de queda ininterrupta, o estado volta a NORMAL
+        por conta propria -- nao precisa mais de confirmacao manual."""
+        clock = FakeClock()
+        monitor = GripMonitor(clock=clock)
+        with patch("app.safety.grip_monitor.safety_manager") as mock_safety:
+            calibrate(monitor, clock)
+            monitor.update(DROPPED_PRESSURE)
+            clock.advance(1.1)
+            monitor.update(DROPPED_PRESSURE)
+            assert monitor.status()["state"] == SafetyState.ALARM
+            mock_safety.reset_mock()
+
+            clock.advance(GripMonitor.PROLONGED_LOSS_S)
+            changed = monitor.update(DROPPED_PRESSURE)
+
+        assert monitor.status()["state"] == SafetyState.NORMAL
+        assert changed is True
+        mock_safety.process_grip_signal.assert_called_with(SafetyState.NORMAL)
 
 
 class TestSafetyManagerIntegration:

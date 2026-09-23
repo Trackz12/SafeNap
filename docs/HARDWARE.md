@@ -70,24 +70,40 @@ o valor ao `GripMonitor` (`backend/app/safety/grip_monitor.py`), que:
    `ALARM` — o limiar de `ALARM` replica a tolerância de 1s do firmware
    histórico (`tempoTolerancia`); o estágio de `WARNING` é um aviso mais
    cedo que o sistema original não tinha.
-4. **Sem corte automático do alarme**: o firmware histórico desligava o
-   alerta sozinho após 10s (`tempoMaximoAlerta`), mesmo que a mão não
-   tivesse voltado ao volante. O `GripMonitor` atual não reproduz esse
-   comportamento — o alarme permanece enquanto a queda persistir, e só é
-   silenciado por confirmação explícita do usuário (`ALARM_ACKNOWLEDGED`).
-   Para isso funcionar de verdade, o `GripMonitor` **renova o sinal a
-   cada leitura** enquanto o estado não for `NORMAL` (não só na mudança de
-   estado) — sem isso, o watchdog de segurança do `SafetyManager` (que
-   desliga o hardware após 15s sem nenhum sinal, pensado para o caso de a
-   aba do navegador travar) desligaria sozinho um alarme de garra
-   sustentado, reproduzindo por acidente o corte automático que este
-   item diz que não existe mais. É o mesmo papel do `HEARTBEAT` que o
-   frontend já manda a cada 3s durante um alarme de visão.
-5. **Reset em toda mudança de conexão serial**: ao cair ou reconectar, o
-   backend chama `grip_monitor.reset()` — evita avaliar a primeira
-   leitura pós-reconexão contra uma baseline antiga (possivelmente de um
-   sensor diferente) e evita que a UI mostre a última pressão conhecida
-   como se fosse ao vivo enquanto o hardware está desconectado.
+4. **Corte automático só depois de muito tempo (`PROLONGED_LOSS_S`, 30s)**:
+   o firmware histórico desligava o alerta sozinho após 10s
+   (`tempoMaximoAlerta`), mesmo que a mão não tivesse voltado ao volante.
+   O `GripMonitor` não reproduz esse corte curto — o alarme permanece
+   enquanto a queda persistir, silenciável a qualquer momento por
+   confirmação explícita do usuário (`ALARM_ACKNOWLEDGED`) — mas, a
+   partir de `PROLONGED_LOSS_S` de queda ininterrupta, ele mesmo volta a
+   `NORMAL` sozinho. Motivo: o sensor FSR é hardware físico persistente,
+   ligado direto ao backend, independente de qualquer sessão de navegador
+   estar aberta (ver item 5) — sem esse teto, ele alarmava indefinidamente
+   sempre que ninguém estivesse segurando, mesmo com o navegador fechado
+   há muito tempo, porque o próprio sinal de garra renova o watchdog do
+   `SafetyManager` a cada leitura enquanto o estado não for `NORMAL` (não
+   só na mudança de estado) — sem essa renovação, o watchdog (que desliga
+   o hardware após 15s sem nenhum sinal, pensado pra aba do navegador
+   travar) já cortaria sozinho por outro caminho. É o mesmo papel do
+   `HEARTBEAT` que o frontend já manda a cada 3s durante um alarme de
+   visão. O teto de 30s é deliberadamente bem maior que o corte de 10s do
+   firmware antigo — existe para "ninguém está testando agora", não pra
+   tolerar sonolência real prolongada; uma implantação em veículo real
+   (fora do escopo atual) deve reavaliar esse número.
+5. **Reset em toda mudança de conexão serial, e em todo novo detector**:
+   ao cair ou reconectar, o backend chama `grip_monitor.reset()` — evita
+   avaliar a primeira leitura pós-reconexão contra uma baseline antiga
+   (possivelmente de um sensor diferente) e evita que a UI mostre a
+   última pressão conhecida como se fosse ao vivo enquanto o hardware
+   está desconectado. Pelo mesmo motivo, também reseta sempre que alguém
+   reivindica o papel de detector (`DETECTOR_CLAIM`, ver
+   `websocket/manager.py`): o sensor FSR é hardware físico persistente,
+   independente do ciclo de vida da sessão do navegador — sem esse reset,
+   a força de aperto de quem calibrou a baseline primeiro continuava
+   valendo para a próxima pessoa que testasse o sistema (relevante numa
+   demonstração com várias pessoas testando o mesmo dispositivo no mesmo
+   dia).
 6. Alimenta o `SafetyManager` como uma segunda fonte de sinal (independente
    da visão/ML do frontend), fundida em **OR por severidade**: o estado
    efetivo do sistema é sempre o mais grave entre "visão" e "garra".

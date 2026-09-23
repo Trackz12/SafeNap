@@ -6,6 +6,7 @@ from fastapi import WebSocket
 from app.core.protocol import WebSocketMessage, EventType
 from app.core.state_store import state_store
 from app.safety.manager import safety_manager
+from app.safety.grip_monitor import grip_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +230,14 @@ class ConnectionManager:
             self._detector_connection = websocket
             state_store.claim_detector(session_id)
             self._session_ids[websocket] = session_id
+            # Cada "Iniciar" pode ser uma PESSOA DIFERENTE segurando o
+            # sensor de pressão (ex.: demonstração com várias pessoas no
+            # mesmo dia). A baseline do GripMonitor só era resetada em
+            # queda/reconexão serial — nunca ao trocar de sessão/detector —
+            # então a força de aperto de quem calibrou primeiro continuava
+            # valendo pra todo mundo depois. Reseta aqui, no mesmo espírito
+            # do reset de calibração do frontend em skipWithDefault().
+            grip_monitor.reset()
             ack = {
                 "type": "DETECTOR_ASSIGNED",
                 "timestamp": msg.timestamp,

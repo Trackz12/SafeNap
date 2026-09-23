@@ -2,14 +2,14 @@
 
 Cenarios sinteticos executados contra o GripMonitor real (nao uma reimplementacao), com relogio controlado. Verdade-fundamental atribuida pelos autores com base nos limiares documentados em docs/HARDWARE.md -- verificacao de especificacao, nao validacao com dados humanos reais (nao ha dataset publico de pressao de empunhadura veicular disponivel, diferente da visao computacional).
 
-**10/10** cenários classificados conforme a verdade-fundamental atribuída.
+**11/11** cenários classificados conforme a verdade-fundamental atribuída.
 
 ## Matriz de confusão (binária: alerta = WARNING ou ALARM vs. sem alerta = NORMAL)
 
 | | Previsto: alerta | Previsto: sem alerta |
 |---|---|---|
 | **Real: alerta** | VP=4 | FN=0 |
-| **Real: sem alerta** | FP=0 | VN=6 |
+| **Real: sem alerta** | FP=0 | VN=7 |
 
 Precisão: **1.000** · Recall: **1.000** · F1: **1.000**
 
@@ -25,5 +25,6 @@ Precisão: **1.000** · Recall: **1.000** · F1: **1.000**
 | recuperacao_parcial_nao_libera | Pressão sobe mas fica entre 35% e 60% da baseline (histerese não libera) | WARNING | WARNING | ✅ |
 | deriva_gradual_baseline | Deriva lenta de pressão (baseline adaptativa acompanha) | NORMAL | NORMAL | ✅ |
 | sem_calibracao | Leitura baixa isolada sem baseline calibrada ainda | NORMAL | NORMAL | ✅ |
-| alarme_sustentado_sem_autocorte | Queda mantida por 30s — sem corte automático | ALARM | ALARM | ✅ |
+| alarme_sustentado_25s_ainda_ativo | Queda mantida por 25s — ainda bem além do corte de 10s do firmware antigo | ALARM | ALARM | ✅ |
+| alarme_prolongado_libera_sozinho | Queda mantida além de PROLONGED_LOSS_S (30s) — libera para NORMAL sozinho | NORMAL | NORMAL | ✅ |
 | reset_apos_reconexao | Reset (simula queda/reconexão de serial) limpa o estado | NORMAL | NORMAL | ✅ |

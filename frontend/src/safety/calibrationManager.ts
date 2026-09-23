@@ -408,9 +408,48 @@ export class CalibrationManager {
         return this.isCalibrated() || this.useDefaultSkip;
     }
 
-    /** Usuário optou por monitorar sem calibrar (threshold padrão). */
+    /**
+     * Usuário optou por monitorar sem calibrar (threshold padrão neutro).
+     *
+     * Dois bugs corrigidos aqui (achados auditando o fluxo pra um dia de
+     * demonstração com muita gente testando o mesmo dispositivo):
+     *
+     * 1) Não parava uma calibração ainda em andamento. O wizard já dispara
+     *    startCalibration() em segundo plano assim que abre (antes do
+     *    usuário clicar em qualquer botão); se a pessoa clicasse "Pular"
+     *    rápido, isCalibrating continuava true, e processFrame() só chama
+     *    evaluate() quando `!isCalibrating` — a detecção ficava muda por
+     *    vários segundos (até a coleta de fundo completar ou estourar o
+     *    timeout sozinha), mesmo com "Pular" já clicado.
+     * 2) Não resetava threshold/baselineEar/baselineNoseDrop. Esses campos
+     *    persistem em localStorage entre sessões (mesmo navegador). "Pular"
+     *    silenciosamente continuava usando o threshold/baseline calibrado
+     *    da ÚLTIMA pessoa que usou este dispositivo — não um padrão neutro.
+     *    Num laptop de demonstração usado por várias pessoas no mesmo dia,
+     *    isso significa avaliar o rosto de uma pessoa contra a calibração
+     *    de outra.
+     */
     public skipWithDefault(): void {
+        this.stopDriver();
+        this.isCalibrating = false;
+        this.phase = 'idle';
+        this.openSamples = [];
+        this.closedSamples = [];
+        this.noseDropSamples = [];
+        this.phaseStartedAt = null;
+        this.baselineEar = null;
+        this.closedBaselineEar = null;
+        this.baselineNoseDrop = null;
+        this.closedEyeThreshold = DEFAULT_THRESHOLD;
         this.useDefaultSkip = true;
+        // Sem isso, um F5/nova aba nesta mesma sessão de demonstração
+        // recarregaria a calibração antiga do localStorage de volta
+        // (loadPersisted() no construtor), reabrindo a mesma falha.
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch {
+            // ignore
+        }
         this.notify();
     }
 

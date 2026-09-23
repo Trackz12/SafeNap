@@ -69,7 +69,7 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 |-------|--------------------------|
 | `PERCLOS` | PERCLOS ≥ 25% |
 | `YAWN` | boca aberta sustentada ≥ 400ms (aspect ≥ 0.65), com cooldown de 10s |
-| `HEAD_DROP` | queda do nariz acima do baseline + margem por ≥ 2000ms |
+| `HEAD_DROP` | queda do nariz acima do baseline + margem por ≥ 2000ms **e** olhos não claramente alertas (EAR ≤ threshold×hysteresisFactor) no momento da confirmação — sem isso, olhar pro painel/celular com os olhos bem abertos bastava para disparar |
 | `FACE_LOST` | rosto ausente por ≥ 5s |
 | `PROLONGED_CLOSE` | olhos fechados ≥ 700ms |
 | `EAR_TREND` | EAR médio caiu > 18% abaixo do baseline calibrado na última 1min (fase prodrômica — pálpebras pesando gradualmente; medido apenas com olhos abertos) |
