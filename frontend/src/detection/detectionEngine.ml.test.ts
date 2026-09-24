@@ -35,6 +35,10 @@ describe('DetectionEngine — política ML × regras', () => {
         calibrationManager.skipWithDefault(); // limiar padrão 0,25
         metricsStore.reset();
         engine = new DetectionEngine();
+        // Esta bateria existe para testar a POLITICA HIBRIDA (ML corroborativo).
+        // 'hybrid' deixou de ser o padrao em 2026-09-24 — ver a docstring de
+        // `detectionMode` em detectionEngine.ts —, entao e pedido aqui.
+        engine.setMode('hybrid');
         t = 1_000_000;
         vi.useFakeTimers();
         vi.setSystemTime(t);

@@ -169,6 +169,66 @@ que produzir `earTrendPerSec` e `earStdDev` equivalentes a 8 e a 30 FPS
 a inclinação de uma reta é a mesma em qualquer sub-janela —, por isso o cenário
 é deliberadamente não linear.
 
+### O ML saiu do caminho de decisão (2026-09-24)
+
+Pergunta que motivou a medição: *"essa parte do ML pode estar mais atrapalhando
+do que ajudando?"*. A resposta, medida, é **sim** — e o padrão passou de
+`hybrid` para **`rules`**.
+
+Sonda reproduzível: `ml/scripts/probe_ml_false_positives.py` → `reports/ml_probe/`.
+Sobre **20.736 estados INEQUIVOCAMENTE acordados** (`perclos <= 0,08`,
+`earTrendPerSec >= -0,01`, `earStdDev <= 0,035` — definição estrita, para o
+resultado não ser contaminado por estados que já são sonolência):
+
+| Limiar | Efeito ao cruzar | Estados acordados que cruzam |
+|---|---|---|
+| `>= 0,70` | passa a somar no score contínuo de fusão | **33,3%** |
+| `>= 0,85` | gera `ML_WARNING` **sozinho**, sem regra fisiológica | **16,7%** |
+| `>= 0,95` | nível de `ML_ALARM` (ainda exige corroboração) | 0% |
+
+Pior caso acordado: `P(drowsy) = 0,894` — acima do limiar de WARNING — para
+alguém com EAR absoluto 0,13, piscando 6/min e **PERCLOS zero**.
+
+**Causa raiz:** as regras comparam o EAR ao **limiar calibrado da pessoa**; as
+features do ML usam **EAR absoluto**. Isolando só o EAR, com o resto
+canonicamente acordado:
+
+```
+ear 0,35 -> P=0,392      ear 0,20 -> P=0,666
+ear 0,30 -> P=0,392      ear 0,14 -> P=0,666
+ear 0,24 -> P=0,535      ear 0,12 -> P=0,666
+```
+
+Ou seja: **a calibração — defesa central do projeto contra variação entre
+pessoas — não protege o caminho de ML.** Uma pessoa de olhos naturalmente
+estreitos é "sonolenta" para o modelo por construção. Soma-se a isso um viés
+constante de ~+0,39 causado pelo `noseDropRatio`: o gerador sintético treinou
+com a faixa 0,0–0,08 e o frontend calibrado opera em torno de 0,30.
+
+**E não havia benefício compensando.** Para sonolência real o score satura em
+1,000 — mas nesses casos as regras fortes (PERCLOS, EYES_CLOSED_DURATION,
+MICROSLEEP) já dispararam. O ML não adicionava detecção, apenas superfície de
+falso positivo.
+
+**Dois agravantes encontrados junto:** (a) `detectionMode` era `hybrid` por
+padrão e **nada no app chamava `setMode()`** — o caminho estava permanentemente
+ligado, sem forma de desligar; (b) quando o score cruza 0,85 a fusão
+**sobrescreve** a razão (`warnedReason = 'ML_WARNING'`), então a UI mostrava
+`ML_WARNING` em vez de `PERCLOS`/`PROLONGED_CLOSE` — perda de explicabilidade
+justamente no alerta. O item (b) **não foi corrigido**: com `hybrid` agora sendo
+opt-in, ele só afeta quem pedir explicitamente esse modo. Fica registrado.
+
+**O que continua funcionando:** o ONNX segue sendo inferido e publicado em
+`DetectionMetrics.mlScore` como leitura experimental visível; `fuseSignals` o
+ignora e ele não bloqueia mais a liberação de ALARM. O modo `hybrid` continua
+disponível via `setMode()`, e a bateria de testes da política híbrida continua
+rodando (agora pedindo o modo explicitamente).
+
+**Para reverter:** trocar o padrão de volta para `hybrid` em
+`detectionEngine.ts`. Antes de reverter, rodar a sonda de novo — se o modelo for
+retreinado com dado real, os números acima mudam e a decisão deve ser
+reavaliada com eles, não com estes.
+
 ### Espelho Python
 
 `ml/features/blink.py` (usado para gerar as features de treino) foi atualizado
