@@ -47,7 +47,37 @@ test('mede a cadência real de detecção no navegador', async ({ page }) => {
         samples.push(Number.parseInt((await badge.textContent()) ?? '0', 10));
     }
     const achieved = Math.max(...samples);
+
+    // Custo por quadro: o título do badge expõe `getLastDetectMs()`, que cobre
+    // MediaPipe + EAR + regras.
+    //
+    // LIMITE DESTA MEDIDA: o stream sintético do mock NÃO contém um rosto
+    // humano (o assert abaixo confirma isso lendo o badge de status). Sem rosto
+    // detectado, o MediaPipe pula o estágio de refinamento de landmarks, então
+    // o valor medido aqui é um PISO INFERIOR do custo real, não o custo com
+    // rosto presente. Medir o custo com rosto exige vídeo humano real e fica
+    // como validação de campo — não citar este número como "o custo do
+    // MediaPipe" sem essa ressalva.
+    const title = (await badge.getAttribute('title')) ?? '';
+    const costMatch = /: ([\d.]+) ms/.exec(title);
+    const costMs = costMatch ? Number.parseFloat(costMatch[1]) : NaN;
     console.log(`[medição] cadência de detecção observada: ${JSON.stringify(samples)} -> pico ${achieved} FPS`);
+    console.log(`[medição] custo do passo de detecção (MediaPipe + EAR + regras): ${costMs} ms`);
+
+    // O stream sintético não contém um rosto humano. Registrar isso é
+    // essencial: sem rosto detectado, o MediaPipe pula o estágio de landmarks e
+    // o custo medido é um PISO INFERIOR, não o custo com rosto real.
+    const semRosto = await page.getByText('Sem rosto', { exact: true }).count();
+    const monitorando = await page.getByText('Monitorando', { exact: true }).count();
+    console.log(`[medição] rosto detectado durante a medição? "Sem rosto"=${semRosto} "Monitorando"=${monitorando}`);
+    // Trava a ressalva acima: se algum dia o mock passar a conter um rosto real,
+    // este assert falha e obriga a reinterpretar (e recitar) o custo medido.
+    expect(semRosto, 'o mock passou a conter um rosto? reinterprete o custo medido').toBe(1);
+
+    // O custo por quadro precisa caber no orçamento, senão o teto de ciclo de
+    // trabalho reduz a cadência por design.
+    expect(Number.isFinite(costMs), `título do badge sem custo legível: "${title}"`).toBe(true);
+    expect(costMs).toBeLessThan(100);
 
     // Guarda de regressão, não alvo de desempenho: o laço antigo (setTimeout
     // fixo de 100ms + rAF) ficava preso em ~9 FPS. Qualquer valor claramente

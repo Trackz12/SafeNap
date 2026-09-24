@@ -20,6 +20,7 @@ export const CameraView: React.FC = () => {
     const [isAiReady, setIsAiReady] = useState(false);
     const [aiError, setAiError] = useState(false);
     const [fps, setFps] = useState(0);
+    const [detectMs, setDetectMs] = useState(0);
     const [showWizard, setShowWizard] = useState(false);
     const [claimNotice, setClaimNotice] = useState<string | null>(null);
     const [pauseNotice, setPauseNotice] = useState<string | null>(null);
@@ -129,7 +130,10 @@ export const CameraView: React.FC = () => {
             setFps(0);
             return;
         }
-        const poll = () => setFps(Math.round(mediaPipeManager.getDetectionFps()));
+        const poll = () => {
+            setFps(Math.round(mediaPipeManager.getDetectionFps()));
+            setDetectMs(mediaPipeManager.getLastDetectMs());
+        };
         poll();
         const handle = setInterval(poll, 1000);
         return () => clearInterval(handle);
@@ -290,7 +294,9 @@ export const CameraView: React.FC = () => {
                             }
                             {metrics.yawnActive && <Meh size={12} color="var(--warning)" />}
                             {metrics.headDropped && <Frown size={12} color="var(--warning)" />}
-                            {fps} FPS
+                            <span title={`Cadencia real de deteccao: ${fps} quadros/s. Custo do ultimo passo (MediaPipe + EAR + regras): ${detectMs.toFixed(1)} ms.`}>
+                                {fps} FPS
+                            </span>
                         </span>
                     )}
                 </div>

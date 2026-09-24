@@ -119,6 +119,15 @@ Os dois números são medição, não estimativa: o valor "antes" foi obtido
 revertendo o trecho e rodando o mesmo teste. O teste é guarda de regressão —
 falha se a cadência voltar ao patamar antigo.
 
+O custo por quadro do passo de detecção (MediaPipe + EAR + regras) medido na
+mesma condição foi de **~5 ms**, mas esse valor é um **piso inferior**: a câmera
+sintética do mock não contém rosto humano (o teste afirma isso explicitamente),
+então o estágio de refinamento de landmarks do MediaPipe não executa. **Não
+citar esse número como "o custo do MediaPipe" sem a ressalva.** Medir o custo
+com rosto real exige vídeo humano e fica como validação de campo. O custo do
+último passo também é exposto no `title` do badge de FPS da interface, para
+diagnóstico rápido em máquina desconhecida no dia da demonstração.
+
 O laço agora espera **o que resta** do orçamento de quadro (`TARGET_FRAME_MS`,
 33 ms) depois da detecção, em vez de somar uma espera fixa ao custo do
 trabalho. Dois pisos protegem a interface: `MIN_LOOP_DELAY_MS` (8 ms) e um teto
