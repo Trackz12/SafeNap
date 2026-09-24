@@ -8,6 +8,7 @@ function makeMetrics(overrides: Partial<DetectionMetrics>): DetectionMetrics {
         state: 'NORMAL',
         reason: null,
         facePresent: true,
+        visionQuality: 'GOOD',
         faceLostForMs: 0,
         eyesClosed: false,
         closedForMs: 0,

@@ -2773,11 +2773,11 @@
     "blinkRate": 0
    },
    {
-    "perclos": 0.0,
+    "perclos": 0.08333333333333333,
     "blinkRate": 0
    },
    {
-    "perclos": 0.0033333333333333335,
+    "perclos": 0.15384615384615385,
     "blinkRate": 0
    },
    {
@@ -2973,11 +2973,11 @@
     "blinkRate": 10
    },
    {
-    "perclos": 0.0,
+    "perclos": 0.016129032258064516,
     "blinkRate": 10
    },
    {
-    "perclos": 0.0033333333333333335,
+    "perclos": 0.031746031746031744,
     "blinkRate": 10
    },
    {
@@ -3053,1275 +3053,1275 @@
     "blinkRate": 15
    },
    {
-    "perclos": 0.0,
+    "perclos": 0.012195121951219513,
     "blinkRate": 15
    },
    {
-    "perclos": 0.0033333333333333335,
+    "perclos": 0.024096385542168676,
     "blinkRate": 14
    },
    {
-    "perclos": 0.005,
+    "perclos": 0.03571428571428571,
     "blinkRate": 14
    },
    {
-    "perclos": 0.006666666666666667,
+    "perclos": 0.047058823529411764,
     "blinkRate": 14
    },
    {
-    "perclos": 0.008333333333333333,
+    "perclos": 0.05813953488372093,
     "blinkRate": 14
    },
    {
-    "perclos": 0.01,
+    "perclos": 0.06896551724137931,
     "blinkRate": 14
    },
    {
-    "perclos": 0.011666666666666667,
+    "perclos": 0.07954545454545454,
     "blinkRate": 14
    },
    {
-    "perclos": 0.013333333333333334,
+    "perclos": 0.0898876404494382,
     "blinkRate": 13
    },
    {
-    "perclos": 0.015,
+    "perclos": 0.1,
     "blinkRate": 13
    },
    {
-    "perclos": 0.016666666666666666,
+    "perclos": 0.10989010989010989,
     "blinkRate": 13
    },
    {
-    "perclos": 0.018333333333333333,
+    "perclos": 0.11956521739130435,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12903225806451613,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.1276595744680851,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12631578947368421,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.125,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12371134020618557,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12244897959183673,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12121212121212122,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.12,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.1188118811881188,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11764705882352941,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11650485436893204,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11538461538461539,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11428571428571428,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11320754716981132,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11214953271028037,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.1111111111111111,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11009174311926606,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10909090909090909,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10810810810810811,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.11607142857142858,
     "blinkRate": 11
    },
    {
-    "perclos": 0.023333333333333334,
+    "perclos": 0.12389380530973451,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10526315789473684,
     "blinkRate": 16
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10434782608695652,
     "blinkRate": 16
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10344827586206896,
     "blinkRate": 16
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10256410256410256,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.1016949152542373,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.10084033613445378,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.1,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09917355371900827,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09836065573770492,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0975609756097561,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0967741935483871,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.096,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09523809523809523,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09448818897637795,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09375,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09302325581395349,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09230769230769231,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0916030534351145,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09090909090909091,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.09022556390977443,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08955223880597014,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08888888888888889,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08823529411764706,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08759124087591241,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08695652173913043,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08633093525179857,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08571428571428572,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0851063829787234,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08450704225352113,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08391608391608392,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08333333333333333,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08275862068965517,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0821917808219178,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08163265306122448,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08108108108108109,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08053691275167785,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07947019867549669,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07894736842105263,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0784313725490196,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07792207792207792,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07741935483870968,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07692307692307693,
     "blinkRate": 12
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07643312101910828,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0759493670886076,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07547169811320754,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.075,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07453416149068323,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.08024691358024691,
     "blinkRate": 11
    },
    {
-    "perclos": 0.023333333333333334,
+    "perclos": 0.08588957055214724,
     "blinkRate": 11
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07317073170731707,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07272727272727272,
     "blinkRate": 15
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07228915662650602,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.0718562874251497,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07142857142857142,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07100591715976332,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07058823529411765,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.07017543859649122,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06976744186046512,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06936416184971098,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06896551724137931,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06857142857142857,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06818181818181818,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06779661016949153,
     "blinkRate": 14
    },
    {
-    "perclos": 0.02,
+    "perclos": 0.06741573033707865,
     "blinkRate": 13
    },
    {
-    "perclos": 0.02,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.02,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.02,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.02,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.023333333333333334,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.025,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.02666666666666667,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.028333333333333332,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.03,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.03166666666666667,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.03333333333333333,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.035,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.03666666666666667,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.03833333333333333,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.043333333333333335,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.043333333333333335,
-    "blinkRate": 11
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 14
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.043333333333333335,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.045,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04666666666666667,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.04833333333333333,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.05,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.051666666666666666,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.05333333333333334,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.055,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.056666666666666664,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.058333333333333334,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06333333333333334,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06333333333333334,
-    "blinkRate": 12
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.06333333333333334,
-    "blinkRate": 13
-   },
-   {
-    "perclos": 0.065,
+    "perclos": 0.0670391061452514,
     "blinkRate": 13
    },
    {
     "perclos": 0.06666666666666667,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.06629834254143646,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.07142857142857142,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.07650273224043716,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08152173913043478,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08648648648648649,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0913978494623656,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0962566844919786,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10106382978723404,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10582010582010581,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11052631578947368,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11518324607329843,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11979166666666667,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.12435233160621761,
     "blinkRate": 12
    },
    {
-    "perclos": 0.06833333333333333,
+    "perclos": 0.12371134020618557,
     "blinkRate": 12
    },
    {
-    "perclos": 0.07,
+    "perclos": 0.12307692307692308,
     "blinkRate": 12
    },
    {
-    "perclos": 0.07166666666666667,
+    "perclos": 0.12244897959183673,
     "blinkRate": 12
    },
    {
-    "perclos": 0.07333333333333333,
+    "perclos": 0.1218274111675127,
     "blinkRate": 12
    },
    {
-    "perclos": 0.075,
+    "perclos": 0.12121212121212122,
     "blinkRate": 12
    },
    {
-    "perclos": 0.07666666666666666,
+    "perclos": 0.12060301507537688,
     "blinkRate": 12
    },
    {
-    "perclos": 0.07833333333333334,
+    "perclos": 0.12,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11940298507462686,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.1188118811881188,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11822660098522167,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11764705882352941,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11707317073170732,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11650485436893204,
     "blinkRate": 12
    },
    {
-    "perclos": 0.08,
+    "perclos": 0.11594202898550725,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11538461538461539,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11483253588516747,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.11428571428571428,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.11374407582938388,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.1179245283018868,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.12206572769953052,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.11214953271028037,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.11162790697674418,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.1111111111111111,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.11059907834101383,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.11009174311926606,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.1095890410958904,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.10909090909090909,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.1085972850678733,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.10810810810810811,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.10762331838565023,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10714285714285714,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10666666666666667,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10619469026548672,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10572687224669604,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10526315789473684,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10480349344978165,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10434782608695652,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1038961038961039,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10344827586206896,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10300429184549356,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10256410256410256,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10212765957446808,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1016949152542373,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10126582278481013,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10084033613445378,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.100418410041841,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0995850622406639,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09917355371900827,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09876543209876543,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09836065573770492,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09795918367346938,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0975609756097561,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09716599190283401,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0967741935483871,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0963855421686747,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.096,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09561752988047809,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09523809523809523,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09486166007905138,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09448818897637795,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09411764705882353,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09375,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0933852140077821,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09302325581395349,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09266409266409266,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09230769230769231,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.09195402298850575,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.09541984732824428,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.09885931558935361,
+    "blinkRate": 11
+   },
+   {
+    "perclos": 0.09090909090909091,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.09056603773584905,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.09022556390977443,
+    "blinkRate": 14
+   },
+   {
+    "perclos": 0.0898876404494382,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08955223880597014,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08921933085501858,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08888888888888889,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08856088560885608,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08823529411764706,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08791208791208792,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08759124087591241,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08727272727272728,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08695652173913043,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08664259927797834,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08633093525179857,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08602150537634409,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08571428571428572,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08540925266903915,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.08865248226950355,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09187279151943463,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09507042253521127,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09824561403508772,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10139860139860139,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10452961672473868,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1076388888888889,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11072664359861592,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11379310344827587,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11683848797250859,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11986301369863013,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12286689419795221,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12244897959183673,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12203389830508475,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12162162162162163,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12121212121212122,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12080536912751678,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12040133779264214,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11960132890365449,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11920529801324503,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1188118811881188,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11842105263157894,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1180327868852459,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11764705882352941,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11726384364820847,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11688311688311688,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11650485436893204,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11612903225806452,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1157556270096463,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11858974358974358,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12140575079872204,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11464968152866242,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11428571428571428,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11392405063291139,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11356466876971609,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11320754716981132,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11285266457680251,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1125,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11214953271028037,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11180124223602485,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11145510835913312,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1111111111111111,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11076923076923077,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11042944785276074,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.11009174311926606,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10975609756097561,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1094224924012158,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10909090909090909,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10876132930513595,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10843373493975904,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10810810810810811,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10778443113772455,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10746268656716418,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.10714285714285714,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10682492581602374,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10650887573964497,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10619469026548672,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10588235294117647,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10557184750733138,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10526315789473684,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10495626822157435,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10465116279069768,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10434782608695652,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10404624277456648,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1037463976945245,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10344827586206896,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10315186246418338,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10285714285714286,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10256410256410256,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10227272727272728,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10198300283286119,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1016949152542373,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10140845070422536,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10112359550561797,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10084033613445378,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1005586592178771,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10027855153203342,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0997229916897507,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10220994475138122,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1046831955922865,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.0989010989010989,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09863013698630137,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09836065573770492,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09809264305177112,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09782608695652174,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0975609756097561,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0972972972972973,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09703504043126684,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0967741935483871,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09651474530831099,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0962566844919786,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.096,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09574468085106383,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09549071618037135,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09523809523809523,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09498680738786279,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09473684210526316,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09448818897637795,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.0968586387434555,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.09921671018276762,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1015625,
+    "blinkRate": 13
+   },
+   {
+    "perclos": 0.1038961038961039,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10621761658031088,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.10852713178294573,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11082474226804123,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11311053984575835,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11538461538461539,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11764705882352941,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.11989795918367346,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12213740458015267,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.1218274111675127,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12151898734177215,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12121212121212122,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12090680100755667,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12060301507537688,
+    "blinkRate": 12
+   },
+   {
+    "perclos": 0.12030075187969924,
     "blinkRate": 12
    }
   ]

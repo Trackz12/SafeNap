@@ -24,8 +24,8 @@ frontend/src/detection/
 ├── temporal/
 │   ├── clock.ts               Clock injetável (SystemClock + FakeClock p/ testes)
 │   └── earTrendTracker.ts     tendência de declínio do EAR (fase prodrômica)
-├── vision/visionQuality.ts    tipos GOOD/DEGRADED/LOST, Signal<T> (não usados
-│                              ainda pelo pipeline principal — ver NEEDS VALIDATION)
+├── vision/visionQuality.ts    GOOD/DEGRADED/LOST — integrado ao pipeline e
+│                              publicado em DetectionMetrics.visionQuality
 └── fusion/signalFusion.ts     fonte ÚNICA de evidência→decisão (ver abaixo)
 ```
 
@@ -59,12 +59,125 @@ denominador em vez de silenciosamente contar como "olhos abertos" — ver
 `eye/perclosTracker.ts` para o racional completo e o teste que documenta
 ANTES/DEPOIS.
 
-**NEEDS VALIDATION** (parâmetros que continuam sem base experimental —
+## Auditoria de qualidade de detecção (2026-09-23)
+
+Uma segunda auditoria, focada em **falso positivo / falso negativo** em vez de
+arquitetura, encontrou seis defeitos. Todos corrigidos; os quatro primeiros
+mudam comportamento observável e estão documentados com ANTES/DEPOIS no
+código e em testes dedicados.
+
+| # | Achado | Efeito | Correção |
+|---|--------|--------|----------|
+| 1 | `vision/mediapipe.ts` **descartava silenciosamente** o quadro quando o MediaPipe achava rosto mas `analyzeFrame` rejeitava a geometria — nem `processFrame` nem `processNoFace` eram chamados | FN (tempo não observado entrava no denominador do PERCLOS) **e FP** (`closedSince`/candidato a micro-sono sobreviviam ao intervalo ⇒ ao voltar um quadro válido, `closedForMs` incluía o buraco inteiro ⇒ alarme falso) | rotear para `processNoFace('DEGRADED')` |
+| 2 | confirmação de fechamento por **contagem de quadros** (`closeConfirmFrames`) enquanto o laço real rodava a **8 FPS medidos** ⇒ "3 quadros" ≈ 375 ms | FN sistemático: piscada de 200 ms nunca confirmava ⇒ `blinkRate` ≈ 0, nada entrava no PERCLOS, feature de ML inútil. Comportamento mudava com o FPS da máquina | `closeConfirmMs` (tempo) + `closeConfirmMinFrames` (piso de ruído) |
+| 3 | `validObservedMs = windowMs - lostMs` assumia a janela inteira observada desde o 1º quadro | FN: aos 5 s de sessão com 4 s de olho fechado o PERCLOS reportava 6,7% em vez de 80%; `confidence` era calculada e **nunca consumida** | denominador cresce com a sessão; `sufficient` gate consumido por `FusionInputs.perclosValid` |
+| 4 | `microsleepWarnMs` e `earTrendAlarmFraction` existiam nos 3 presets e **nunca eram lidos** | falsa promessa arquitetural | removidos (ver *Configuração removida*) |
+| 5 | `YawnDetector.active` só caía no ramo "boca fechada" e só após `cooldownMs` | FP: 10 s de WARNING por abertura de 400 ms; com a boca continuamente aberta (falar/rir/cantar) `active` **nunca caía** | `maxMs` + `activeHoldMs`; `cooldownMs` passa a ser guarda de re-disparo |
+| 6 | classificação de piscada devolvia `null` para a zona-morta 400–550 ms | lacuna silenciosa | `BlinkKind` explícito: `artifact`/`normal`/`indeterminate`/`slow`/`prolonged` (nenhuma decisão mudou) |
+
+### Configuração removida (achado nº 4)
+
+`microsleepWarnMs` e `earTrendAlarmFraction` foram **removidos**, não
+implementados. Racional:
+
+- **`microsleepWarnMs`** (900/800/600 ms): um fechamento em nível de micro-sono
+  com essa duração **já** dispara `PROLONGED_CLOSE` via `warnCloseMs`
+  (500–800 ms). Um estágio de WARNING dedicado a micro-sono seria redundante
+  com um caminho de alerta que já existe e funciona.
+- **`earTrendAlarmFraction`**: a preferência de projeto é que a tendência de EAR
+  seja evidência de fadiga progressiva e **nunca** gere ALARM sozinha. O código
+  já se comportava assim (a constante nunca era lida). Implementá-la
+  contrariaria a política; mantê-la sem uso prometia um comportamento
+  inexistente.
+
+### Independência de FPS (§14)
+
+Fenômenos temporais medidos em **tempo**: duração de fechamento, micro-sono,
+bocejo, queda de cabeça, piscada lenta, janelas de PERCLOS e de taxa.
+Quadros permanecem **só** como piso de ruído (`CONFIRM_MIN_FRAMES = 2`,
+mediana-3 do EAR, `EAR_TREND_MIN_SAMPLES`). A bateria
+`detectionEngine.robustness.test.ts` roda os mesmos roteiros a 10, 30 e 60 FPS
+e verifica que piscadas são contadas e que a latência até o ALARM não varia
+por ordem de grandeza.
+
+### Cadência do laço de detecção (2026-09-24)
+
+O próximo passo recomendado pela auditoria era elevar o FPS, porque um período
+de amostragem longo impõe um **teto de resolução temporal** a todos os
+fenômenos oculares — que agora são medidos em ms, mas não podem ser observados
+com granularidade melhor que o período do laço.
+
+**Medido em navegador real** (`frontend/tests/e2e/detection-rate.spec.ts`, que
+ativa a câmera e lê a instrumentação do app):
+
+| | Cadência medida | Período |
+|---|---|---|
+| Antes (`setTimeout(100 ms)` fixo + `requestAnimationFrame`) | **8 FPS** | ~125 ms |
+| Depois (orçamento de quadro adaptativo) | **30 FPS** | ~33 ms |
+
+Os dois números são medição, não estimativa: o valor "antes" foi obtido
+revertendo o trecho e rodando o mesmo teste. O teste é guarda de regressão —
+falha se a cadência voltar ao patamar antigo.
+
+O laço agora espera **o que resta** do orçamento de quadro (`TARGET_FRAME_MS`,
+33 ms) depois da detecção, em vez de somar uma espera fixa ao custo do
+trabalho. Dois pisos protegem a interface: `MIN_LOOP_DELAY_MS` (8 ms) e um teto
+de ciclo de trabalho (`MAX_DUTY_CYCLE`, 0,5 — a espera nunca é menor que o
+tempo gasto detectando). Numa máquina lenta a cadência cai sozinha em vez de
+travar a página. O `requestAnimationFrame` saiu do caminho de agendamento: ele
+adicionava até ~17 ms de jitter e fazia a detecção **parar por completo** quando
+a aba não estava pintando.
+
+**Contador de FPS da interface corrigido.** Ele media `requestAnimationFrame`,
+isto é a taxa de RENDER do navegador (~60), e exibia isso rotulado como "FPS" ao
+lado do vídeo. Era um número verdadeiro sobre a coisa errada: quem lesse
+"60 FPS" concluiria que o sistema analisa 60 quadros por segundo, quando a
+detecção rodava a 8. Agora vem de `mediaPipeManager.getDetectionFps()`.
+
+**Acoplamento corrigido junto (senão o aumento de FPS seria uma regressão):** as
+janelas do EAR trend eram contagens de amostra (20 mínimas / 10 recentes). A
+30 FPS as mesmas 20 amostras valeriam 0,67 s em vez de ~2,5 s, e `EAR_TREND` —
+que é **regra forte** de WARNING — ficaria 3,75x mais sensível sem ninguém ter
+decidido isso. Convertidas para ms (`EAR_TREND_MIN_OBSERVATION_MS` = 2000,
+`EAR_TREND_RECENT_WINDOW_MS` = 1000), com `EAR_TREND_MIN_SAMPLES` reduzido a 8 e
+rebaixado ao papel de piso de ruído.
+
+**Acoplamento NÃO alterado, documentado:** o buffer do `featureExtractor` tem 10
+quadros, então a janela das features de ML passou de ~1,25 s para ~0,33 s. Isso
+NÃO afeta segurança (o ML é corroborativo e gated), mas é mais um motivo pelo
+qual o modelo ONNX precisa ser retreinado antes de qualquer alegação sobre sua
+acurácia. Mexer no buffer agora mudaria a semântica das features de novo, sem
+ganho de segurança.
+
+### Espelho Python
+
+`ml/features/blink.py` (usado para gerar as features de treino) foi atualizado
+junto e `shared/feature_golden.json` regenerado. Sem isso, `perclos`,
+`blinkRate` e `msSinceLastBlink` teriam semântica diferente no treino e na
+inferência — exatamente o desvio treino↔inferência que aquele módulo existe
+para evitar. A paridade é verificada por `frontend/src/ml/goldenParity.test.ts`
+e `ml/tests/test_golden_parity.py`.
+
+**Consequência para o modelo ONNX experimental:** ele foi treinado com a
+semântica ANTIGA de `perclos`/`blinkRate`. Como é corroborativo e já não
+validado, isso não afeta a segurança, mas **o modelo precisa ser retreinado**
+antes de qualquer alegação sobre sua acurácia. Ver *Riscos*.
+
+**NEEDS VALIDATION** (parâmetros de engenharia sem base experimental —
 sinalizados no código, não apresentados como "corretos"): o clamp do
 threshold de calibração `[0.12, 0.45]` e o fator 0.5 (média simples) entre
-EAR aberto/fechado; os pesos de `WEIGHTS` na fusão contínua (`fusion/signalFusion.ts`);
-os graus de `VisionQuality.DEGRADED` (hoje `frameAnalyzer.ts` só distingue
-"confiável" de "descartado", não uma gradação intermediária).
+EAR aberto/fechado; os pesos de `WEIGHTS` na fusão contínua
+(`fusion/signalFusion.ts`); `closeConfirmMs` (60/90/150 ms);
+`perclosMinObservationMs` (20 s); `yawnMaxMs` (7 s) e `yawnActiveHoldMs` (2 s);
+o critério de `VisionQuality.DEGRADED` (hoje `|yawRatio| > 0.25`, o mesmo
+limiar que `combineEyes` já usava para "confiar num olho só").
+
+**Decisão explícita:** `VisionQuality` é **reportada, não usada para ponderar
+decisão**. Rebaixar o peso de um sinal por causa do yaw exigiria um esquema de
+pesos validado — inventar um seria apresentar como ciência o que é chute. O
+que a qualidade de visão **faz** hoje: (a) `LOST`/`DEGRADED` mantêm o quadro
+fora do denominador de observação válida do PERCLOS e do blink rate, e
+(b) a UI distingue "Sem rosto" de "Ajuste a posição".
 
 A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de vídeo sai do cliente). O MediaPipe FaceLandmarker extrai 478 pontos faciais; a partir deles são calculados, por frame, quatro sinais independentes que alimentam a máquina de estados.
 
@@ -89,7 +202,7 @@ A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de v
 ## Detecção de olhos fechados (com histerese e confirmação)
 
 - O EAR passa por um **filtro de mediana** (janela de 3 frames) antes da avaliação — mata picos de jitter de 1 frame sem o atraso médio de um EMA (ver seção *Suavização do EAR*).
-- Olhos só são marcados como fechados após **N frames consecutivos abaixo do threshold** (`closeConfirmFrames`: 4 no leve, 3 no padrão, 2 no alta) — um frame ruidoso isolado não dispara mais o estado.
+- Olhos só são marcados como fechados após **tempo contínuo abaixo do threshold** (`closeConfirmMs`: 150 ms no leve, 90 ms no padrão, 60 ms no alta) **e** um piso de 2 quadros consecutivos. O tempo é a unidade do fenômeno fisiológico; os quadros são só proteção contra ruído. Antes de 2026-09-23 a regra era contagem pura de quadros, o que na cadência medida de 8 FPS equivalia a ~375 ms no preset padrão e tornava piscadas de 200 ms **invisíveis** — ver *Auditoria de qualidade*, achado nº 2.
 - Só reabrem quando `EAR > threshold × hysteresisFactor` (padrão 1.15) — evita flicker de estado quando o EAR oscila perto do limite.
 - Cada segmento fechado é registrado (início/fim) para PERCLOS e contagem de piscadas (duração entre 50–400ms conta como piscada).
 
@@ -99,14 +212,39 @@ Proporção do tempo em que os olhos ficaram fechados dentro de uma janela desli
 
 **Anti-falso-positivo:** segmentos com duração menor que `perclosIgnoreMs` (400ms — duração típica de uma piscada) são **excluídos do PERCLOS**. Piscadas normais continuam sendo contadas, mas não inflam a métrica de sonolência.
 
-**Denominador = tempo VÁLIDO observado, não janela de relógio fixa** (desde 2026-09-23, ver `eye/perclosTracker.ts`). Antes, o denominador era sempre 60000ms de relógio, mesmo com boa parte da janela sem rosto observável (oclusão, GPU engasgando, olhar pro retrovisor) — esse tempo silenciosamente contava como "olhos abertos", diluindo o PERCLOS bem no momento em que a confiança no dado deveria cair. Agora: `perclos = closedMs / (60000 - tempoSemRostoNaJanela)`. Em sessões com pouca perda de rosto o número não muda; em sessões com perda de rosto frequente, o PERCLOS reportado pode ser mais alto que antes — é a correção pretendida.
+**Denominador = tempo VÁLIDO observado, não janela de relógio fixa** (desde 2026-09-23, ver `eye/perclosTracker.ts`). Antes, o denominador era sempre 60000ms de relógio, mesmo com boa parte da janela sem rosto observável (oclusão, GPU engasgando, olhar pro retrovisor) — esse tempo silenciosamente contava como "olhos abertos", diluindo o PERCLOS bem no momento em que a confiança no dado deveria cair.
+
+Fórmula atual:
+
+```
+validObservedMs = min(60000, agora - inícioDaObservação) - tempoSemRostoNaJanela
+perclos         = closedMs / validObservedMs
+confidence      = validObservedMs / 60000
+sufficient      = validObservedMs >= perclosMinObservationMs (20 s)
+```
+
+Duas correções distintas, ambas em direção de **falso negativo** antes:
+
+1. **perda de rosto** sai do denominador em vez de contar como "olhos abertos";
+2. **início de sessão** limita o denominador ao que de fato foi observado. Antes,
+   aos 5 s de sessão com 4 s de olhos fechados, o resultado era `4000/60000 =
+   6,7%` — um número baixo com aparência de medida válida. O PERCLOS era
+   praticamente **inerte no primeiro minuto** (bater 25% exigia 15 s acumulados
+   de fechamento).
+
+**A confiança participa da decisão:** enquanto `sufficient === false`, o PERCLOS
+é **ignorado por completo** pela fusão (`FusionInputs.perclosValid`) — não vira
+regra forte, não soma no score contínuo, não aparece em `contributingSignals` e
+não bloqueia a liberação de um ALARM. O valor continua sendo calculado e
+publicado para gráfico/depuração. Antes, uma razão calculada sobre poucos
+segundos tinha exatamente o mesmo peso de uma calculada sobre a janela cheia.
 
 ## Micro-sono (MICROSLEEP) — detector dedicado de evento agudo
 
 O PERCLOS é uma métrica de **janela de 60s**: um micro-sono isolado de 1.5–3s fica diluído na média e demora a escalar a severidade. O detector de micro-sono reage ao **evento agudo** em tempo real:
 
 - **Gatilho:** EAR < `threshold × microsleepThresholdFactor` (0.55 — olho *bem* fechado, não mero semi-fechado) sustentado por `microsleepAlarmMs` (600–2000ms conforme preset).
-- **Confirmação:** exige `closeConfirmFrames` frames consecutivos — mesmo anti-jitter do fechamento normal.
+- **Confirmação:** exige um piso de 2 quadros consecutivos (`CONFIRM_MIN_FRAMES`) além da duração. Como `microsleepAlarmMs` (1500–2000 ms) corresponde a dezenas de quadros em qualquer cadência praticada, o piso de quadros nunca é a restrição decisiva aqui — é apenas coerência com o fechamento normal.
 - **Cooldown** (`microsleepCooldownMs`, 8–12s): evita re-alarmar dentro da mesma onda de sonolência.
 - **Prioridade máxima:** se micro-sono e outra razão disparam juntos, `MICROSLEEP` vence (é o sinal mais crítico).
 
@@ -119,7 +257,7 @@ Sonolência real **evolui gradualmente**: a pálpebra desce aos poucos (fadiga m
 - **Buffer de tendência:** amostras de EAR **suavizado** (filtro de mediana-3, o mesmo usado para fechamento) coletadas **apenas com olhos abertos** (piscadas não contaminam o declínio) numa janela de 60s (`longEarBuffer`).
 - **Sinal:** fração de declínio da **média das últimas 10 amostras** suavizadas vs `baselineEar` calibrado. Se `(baseline - recent) / baseline > earTrendWarnFraction` (15–20% conforme preset), dispara WARNING `EAR_TREND`.
 - **Requer calibração:** sem baseline calibrado não há tendência (retorna null — não dispara com o threshold padrão).
-- **Alvo exato:** 20 amostras mínimas (~2s de dados) antes de avaliar — evita disparo por ruído de poucos frames.
+- **Tempo mínimo:** as amostras precisam cobrir `EAR_TREND_MIN_OBSERVATION_MS` (2000 ms) de relógio, mais um piso de 8 amostras. Em MILISSEGUNDOS desde 2026-09-24: eram 20 amostras, que valiam ~2,5 s a 8 FPS mas passariam a valer 0,67 s ao subir o laço para 30 FPS — o sinal ficaria 3,75x mais sensível sem ninguém ter decidido isso. A média "recente" também é temporal (`EAR_TREND_RECENT_WINDOW_MS`, 1000 ms) em vez de "as últimas 10 amostras".
 - **Anti-falso-positivo:** a média das últimas 10 amostras suavizadas exige um declínio **sustentado** — um frame isolado de jitter (queda brusca de EAR por 1 frame, comum no MediaPipe) não consegue simular pálpebra caindo gradualmente.
 
 Isso dá ao sistema a capacidade de avisar o motorista **antes** do fechamento crítico: "pálpebras pesando" em vez de esperar o micro-sono.
@@ -136,7 +274,7 @@ NORMAL ──(sinal de aviso)──► WARNING ──(sinal crítico)──► A
 | Razão | Condição (preset padrão) |
 |-------|--------------------------|
 | `PERCLOS` | PERCLOS ≥ 25% |
-| `YAWN` | boca aberta sustentada ≥ 400ms (aspect ≥ 0.65), com cooldown de 10s |
+| `YAWN` | boca aberta entre 400ms e `yawnMaxMs` (7s; abertura mais longa não é bocejo — é fala/riso/canto), persistindo `yawnActiveHoldMs` (2s) após fechar; `yawnCooldownMs` (10s) é o intervalo mínimo antes de um NOVO bocejo contar |
 | `HEAD_DROP` | queda do nariz acima do baseline + margem por ≥ 2000ms **e** olhos não claramente alertas (EAR ≤ threshold×hysteresisFactor) no momento da confirmação — sem isso, olhar pro painel/celular com os olhos bem abertos bastava para disparar |
 | `FACE_LOST` | rosto ausente por ≥ 5s |
 | `PROLONGED_CLOSE` | olhos fechados ≥ 700ms |

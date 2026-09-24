@@ -28,10 +28,45 @@
  *          um efeito colateral, mas é uma mudança de valor observável, por
  *          isso está documentada aqui e não só no changelog do commit.
  *
- *   NEEDS VALIDATION: o piso de `validObservedMs` abaixo do qual o PERCLOS é
- *          tratado como não-confiável (hoje simplesmente retorna 0 quando
- *          validObservedMs<=0) não foi validado com dados reais de uso —
- *          é um valor de sanidade, não um número derivado de experimento.
+ * SEGUNDA MUDANÇA DE COMPORTAMENTO (auditoria de qualidade de detecção,
+ * 2026-09-23, achado nº 3):
+ *
+ *   ANTES: `validObservedMs = windowMs - lostMs` — o denominador assumia a
+ *          janela INTEIRA como observada desde o primeiro frame da sessão.
+ *          Aos 5 s de sessão, com 4 s de olhos fechados, o resultado era
+ *          `4000 / 60000 = 6,7%` em vez dos 80% reais. Efeito prático: o
+ *          PERCLOS ficava numericamente INERTE no primeiro minuto de uso
+ *          (para bater `perclosWarningLevel`=0,25 eram necessários 15 s
+ *          acumulados de fechamento) e, pior, reportava um número baixo com
+ *          aparência de medida válida. Falso negativo silencioso.
+ *
+ *   DEPOIS: `validObservedMs = min(windowMs, now - observationStartedAt) -
+ *           lostMs`. O denominador cresce junto com a sessão até encher a
+ *           janela. Junto com isso, `sufficient` informa se houve observação
+ *           suficiente para a razão significar algo — quem consome (a fusão)
+ *           ignora o PERCLOS enquanto `sufficient === false`, em vez de
+ *           tratar um número calculado sobre 2 s de dados como PERCLOS.
+ *
+ *   MOTIVO: um percentual só é um percentual sobre o que foi de fato
+ *           observado. Inflar o denominador com tempo que nunca existiu é
+ *           matematicamente errado e enviesa para falso negativo exatamente
+ *           no início da sessão, quando ninguém ainda calibrou o hábito de
+ *           uso do sistema.
+ *
+ *   RISCO: entre `minObservationMs` e a janela cheia, o PERCLOS agora é mais
+ *          sensível do que era antes (denominador menor). Isso é a correção
+ *          pretendida, mas é uma mudança de valor observável — episódios que
+ *          antes passavam batidos no primeiro minuto agora podem gerar
+ *          WARNING. Mitigado por `minObservationMs` e pelo fato de que um
+ *          fechamento longo o suficiente para dominar uma janela curta já
+ *          dispara `EYES_CLOSED_DURATION`/`MICROSLEEP` antes, por regra forte.
+ *
+ * ENGINEERING PARAMETER / NEEDS VALIDATION: `minObservationMs` (padrão
+ * 20000 ms = 1/3 da janela de 60 s) é uma escolha de engenharia para que a
+ * razão não seja calculada sobre pouquíssimos dados. NÃO é um valor derivado
+ * de experimento. Validação necessária: rodar sessões rotuladas variando
+ * `minObservationMs` em {10s, 20s, 30s} e medir taxa de falso positivo de
+ * PERCLOS no primeiro minuto contra rótulo humano de sonolência.
  */
 
 export interface Interval {
@@ -44,6 +79,8 @@ export interface PerclosConfig {
     windowMs: number;
     /** Segmentos de fechamento mais curtos que isto não contam (filtra piscada normal). */
     ignoreMs: number;
+    /** Observação válida mínima para a razão ser reportada como significativa. */
+    minObservationMs: number;
 }
 
 export interface PerclosResult {
@@ -55,15 +92,33 @@ export interface PerclosResult {
     closedMs: number;
     /** validObservedMs / windowMs — 1.0 = janela inteira observada, sem lacunas. */
     confidence: number;
+    /**
+     * `validObservedMs >= minObservationMs`. Quando falso, `perclos` ainda é
+     * calculado (útil para depuração/gráfico) mas NÃO deve alimentar decisão —
+     * ver `FusionInputs.perclosValid`.
+     */
+    sufficient: boolean;
 }
 
 export class PerclosTracker {
     private config: PerclosConfig;
     private closedSegments: Interval[] = [];
     private lostIntervals: Interval[] = [];
+    /** Primeiro instante em que este tracker observou qualquer coisa. */
+    private observationStartedAt: number | null = null;
 
     constructor(config: PerclosConfig) {
         this.config = config;
+    }
+
+    /**
+     * Marca o início da observação. Idempotente — só o primeiro valor conta.
+     * Chamado pelo orquestrador no primeiro frame (com ou sem rosto), porque
+     * "quanto tempo faz que estamos olhando" é propriedade da sessão, não do
+     * tracker.
+     */
+    public markObservationStart(now: number): void {
+        if (this.observationStartedAt === null) this.observationStartedAt = now;
     }
 
     public updateConfig(config: PerclosConfig): void {
@@ -96,6 +151,7 @@ export class PerclosTracker {
      * original.
      */
     public compute(now: number, liveClosedSince: number | null, liveLostSince: number | null): PerclosResult {
+        this.markObservationStart(now);
         const windowStart = now - this.config.windowMs;
         this.closedSegments = this.closedSegments.filter((s) => s.end > windowStart);
         this.lostIntervals = this.lostIntervals.filter((s) => s.end > windowStart);
@@ -110,15 +166,22 @@ export class PerclosTracker {
             lostMs += now - Math.max(liveLostSince, windowStart);
         }
 
-        const validObservedMs = Math.max(0, this.config.windowMs - lostMs);
+        // A janela só vale até onde a observação de fato começou: antes disso
+        // não havia "tempo de olhos abertos", havia ausência de sistema.
+        const elapsedObservable = this.observationStartedAt !== null
+            ? Math.min(this.config.windowMs, now - this.observationStartedAt)
+            : 0;
+        const validObservedMs = Math.max(0, elapsedObservable - lostMs);
         const perclos = validObservedMs > 0 ? Math.min(1, closedMs / validObservedMs) : 0;
         const confidence = this.config.windowMs > 0 ? validObservedMs / this.config.windowMs : 0;
+        const sufficient = validObservedMs >= this.config.minObservationMs;
 
-        return { perclos, validObservedMs, closedMs, confidence };
+        return { perclos, validObservedMs, closedMs, confidence, sufficient };
     }
 
     public reset(): void {
         this.closedSegments = [];
         this.lostIntervals = [];
+        this.observationStartedAt = null;
     }
 }

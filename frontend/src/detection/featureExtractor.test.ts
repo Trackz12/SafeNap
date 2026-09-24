@@ -10,7 +10,7 @@ import type { FrameAnalysis } from '../vision/frameAnalyzer';
 const BASE_CONTEXT = { perclos: 0, blinkRate: 0, lastBlinkAt: null };
 
 function frame(ear: number, mouth = 0.1, nose = 0.5, yaw = 0): FrameAnalysis {
-    return { ear, earL: ear, earR: ear, mouthAspect: mouth, noseDropRatio: nose, yawRatio: yaw };
+    return { ear, earL: ear, earR: ear, mouthAspect: mouth, noseDropRatio: nose, yawRatio: yaw, quality: 'GOOD' };
 }
 
 // ── Funções puras ──

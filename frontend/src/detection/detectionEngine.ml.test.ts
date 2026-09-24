@@ -12,7 +12,7 @@ import type { FrameAnalysis } from '../vision/frameAnalyzer';
  * Estes testes verificam a POLÍTICA de decisão, não a qualidade do modelo.
  */
 function frame(ear: number, mouthAspect = 0.2): FrameAnalysis {
-    return { ear, earL: ear, earR: ear, mouthAspect, noseDropRatio: 0.3, yawRatio: 0 };
+    return { ear, earL: ear, earR: ear, mouthAspect, noseDropRatio: 0.3, yawRatio: 0, quality: 'GOOD' };
 }
 
 describe('DetectionEngine — política ML × regras', () => {

@@ -1,10 +1,30 @@
-﻿export interface FrameAnalysis {
+﻿import type { VisionQuality } from '../detection/vision/visionQuality';
+
+export interface FrameAnalysis {
     ear: number;
     earL: number;
     earR: number;
     mouthAspect: number;
     noseDropRatio: number;
     yawRatio: number;
+    /**
+     * Confiabilidade da geometria deste quadro (auditoria de qualidade,
+     * 2026-09-23, achado nº 1). `GOOD` = pose frontal, os dois olhos
+     * contribuem para o EAR. `DEGRADED` = perfil significativo
+     * (|yawRatio| > YAW_PROFILE_THRESHOLD): `combineEyes` passa a confiar
+     * apenas no olho mais visível, então o EAR vem de um olho só e é
+     * intrinsecamente menos confiável.
+     *
+     * NUNCA é `LOST` aqui: se a geometria fosse inutilizável, `analyzeFrame`
+     * teria devolvido `null`. `LOST` existe no enum para o chamador
+     * (`vision/mediapipe.ts`) classificar o quadro que não produziu análise.
+     *
+     * Este campo é REPORTADO (publicado em `DetectionMetrics.visionQuality`)
+     * e NÃO pondera nenhuma decisão. Rebaixar o peso de um sinal por causa do
+     * yaw exigiria um esquema de pesos validado, que este projeto não tem —
+     * ver `docs/DETECTION.md`, seção NEEDS VALIDATION.
+     */
+    quality: Exclude<VisionQuality, 'LOST'>;
 }
 
 interface Point {
@@ -165,5 +185,9 @@ export function analyzeFrame(landmarks: Point[]): FrameAnalysis | null {
         return null;
     }
 
-    return { ear, earL, earR, mouthAspect, noseDropRatio, yawRatio };
+    // Mesmo limiar que `combineEyes` já usa pra decidir "confiar num olho só":
+    // acima dele o EAR deixa de ser média binocular, então a confiança cai.
+    const quality = Math.abs(yawRatio) > YAW_PROFILE_THRESHOLD ? 'DEGRADED' : 'GOOD';
+
+    return { ear, earL, earR, mouthAspect, noseDropRatio, yawRatio, quality };
 }

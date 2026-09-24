@@ -13,6 +13,7 @@ const THRESHOLDS: FusionThresholds = {
 };
 
 const QUIET: FusionInputs = {
+    perclosValid: true,
     perclos: 0,
     yawnActive: false,
     headDropped: false,
@@ -106,7 +107,7 @@ describe('fuseSignals — camada 3 (fallback contínuo, sinais de suporte fracos
 
     it('scores contínuos ficam limitados (cap 1.5) mesmo com tudo no máximo', () => {
         const everything: FusionInputs = {
-            perclos: 1.0, yawnActive: true, headDropped: true, faceLost: true,
+            perclos: 1.0, perclosValid: true, yawnActive: true, headDropped: true, faceLost: true,
             closedForMs: 5000, microsleepForMs: 5000, microsleepMeetsThreshold: true,
             earTrendFraction: 0.9, slowBlinksActive: true, mlScore: 1.0, mode: 'hybrid',
         };

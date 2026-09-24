@@ -29,7 +29,7 @@ import type { FrameAnalysis } from '../vision/frameAnalyzer';
  */
 
 function makeFrame(ear: number, mouthAspect = 0.2, noseDropRatio = 0.3): FrameAnalysis {
-    return { ear, earL: ear, earR: ear, mouthAspect, noseDropRatio, yawRatio: 0 };
+    return { ear, earL: ear, earR: ear, mouthAspect, noseDropRatio, yawRatio: 0, quality: 'GOOD' };
 }
 
 /** Controla o relógio falso manualmente (vi.setSystemTime), sem depender de timers reais. */

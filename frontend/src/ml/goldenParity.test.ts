@@ -97,7 +97,7 @@ describe('paridade do estado de piscada/PERCLOS (DetectionEngine real × BlinkTr
         let maxPerclos = 0;
         ears.forEach((ear, i) => {
             vi.setSystemTime(start + i * dtMs);
-            engine.processFrame({ ear, earL: ear, earR: ear, mouthAspect: 0.2, noseDropRatio: 0.3, yawRatio: 0 });
+            engine.processFrame({ ear, earL: ear, earR: ear, mouthAspect: 0.2, noseDropRatio: 0.3, yawRatio: 0, quality: 'GOOD' });
             const m = metricsStore.get()!;
             expect(close(m.perclos, expected[i].perclos), `perclos frame ${i}: TS=${m.perclos} Py=${expected[i].perclos}`).toBe(true);
             expect(m.blinkRate, `blinkRate frame ${i}`).toBe(expected[i].blinkRate);

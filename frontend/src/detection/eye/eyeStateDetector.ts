@@ -11,8 +11,8 @@ import type { Clock } from '../temporal/clock';
  * continuam sendo os únicos números que decidem a transição:
  *
  *   OPEN:    ear >= threshold, olho não está fechado
- *   CLOSING: ear <  threshold, mas ainda não confirmou closeConfirmFrames
- *            quadros consecutivos (zona de confirmação, existia como
+ *   CLOSING: ear <  threshold, mas ainda não confirmou a janela de
+ *            confirmação (zona de confirmação, existia como
  *            `belowThresholdStreak` sem nome)
  *   CLOSED:  confirmado fechado, ear ainda <= threshold
  *   OPENING: confirmado fechado, mas ear já subiu acima de threshold e ainda
@@ -26,9 +26,52 @@ import type { Clock } from '../temporal/clock';
  */
 export type EyeState = 'OPEN' | 'CLOSING' | 'CLOSED' | 'OPENING' | 'UNKNOWN';
 
+/**
+ * MUDANÇA DE COMPORTAMENTO (auditoria de qualidade de detecção, 2026-09-23,
+ * achado nº 2): a confirmação de fechamento passou de CONTAGEM DE QUADROS
+ * para DURAÇÃO + piso de quadros.
+ *
+ *   ANTES: `belowThresholdStreak >= closeConfirmFrames` (4/3/2 quadros nos
+ *          presets lenient/standard/strict). O laço de detecção real roda a
+ *          ~10 FPS (`vision/mediapipe.ts`: setTimeout de 100 ms), então
+ *          "3 quadros" equivalia a ~300 ms no preset padrão. Piscada humana
+ *          normal dura 100–400 ms: uma piscada de 200 ms produzia apenas 2
+ *          quadros abaixo do limiar e NUNCA era confirmada como fechamento.
+ *          Consequência: nenhum `closedSegmentEnded` era emitido, a piscada
+ *          não era contada (`blinkRate` ≈ 0), não entrava no PERCLOS e não
+ *          alimentava a taxa de piscada lenta. Falso negativo sistemático — e
+ *          o comportamento mudava junto com o FPS (o mesmo "3 quadros" vale
+ *          300 ms a 10 FPS, 100 ms a 30 FPS e 50 ms a 60 FPS).
+ *
+ *   DEPOIS: confirma quando `tempoAbaixoDoLimiar >= closeConfirmMs` **E**
+ *           `quadrosAbaixoDoLimiar >= closeConfirmMinFrames`. O tempo é a
+ *           unidade do fenômeno fisiológico; os quadros ficam no papel que o
+ *           §14 da auditoria define para eles — piso de ruído, não relógio.
+ *
+ *   MOTIVO: fechamento ocular é um fenômeno temporal. Medir em quadros faz o
+ *           sistema ser mais sensível em máquinas rápidas e cego em máquinas
+ *           lentas, o que é inaceitável num projeto que vai ser testado por
+ *           muitas pessoas em hardware diferente no mesmo dia.
+ *
+ *   RISCO: a ~10 FPS o preset padrão passa a confirmar no 2º quadro (~100 ms)
+ *          em vez do 3º (~300 ms), ou seja, confirma MAIS fechamentos. Isso é
+ *          o objetivo (piscadas deixam de ser invisíveis), mas aumenta a
+ *          exposição a um mergulho transitório de EAR. Mitigado por
+ *          `closeConfirmMinFrames = 2` (um quadro isolado nunca confirma) e
+ *          pelo filtro de mediana de 3 quadros que já existia.
+ *
+ * ENGINEERING PARAMETER / NEEDS VALIDATION: `closeConfirmMs` (60/90/150 ms em
+ * strict/standard/lenient) foi escolhido para ficar ABAIXO da piscada
+ * fisiológica mais curta (~100 ms) e ACIMA de um único quadro de ruído. NÃO é
+ * um valor derivado de experimento. Validação necessária: gravar sessões com
+ * marcação manual de piscadas e medir recall de piscada por preset a 10, 30 e
+ * 60 FPS.
+ */
 export interface EyeStateConfig {
-    /** Quadros consecutivos abaixo do threshold antes de confirmar fechado. */
-    closeConfirmFrames: number;
+    /** Tempo contínuo abaixo do threshold antes de confirmar fechado (ms). */
+    closeConfirmMs: number;
+    /** Piso de quadros consecutivos — proteção contra ruído, NÃO unidade de tempo. */
+    closeConfirmMinFrames: number;
     /** Fator sobre o threshold que o EAR precisa superar pra reabrir (evita flicker). */
     hysteresisFactor: number;
     /** Janela do filtro de mediana sobre o EAR cru (frames). */
@@ -114,8 +157,15 @@ export class EyeStateDetector {
         }
 
         const wasClosed = this.state === 'CLOSED' || this.state === 'OPENING';
+        // Confirmação por TEMPO (fenômeno fisiológico) com piso de quadros
+        // (proteção contra ruído) — ver docstring de EyeStateConfig.
+        const belowForMs = this.closedCandidateSince !== null ? now - this.closedCandidateSince : 0;
+        const confirmed =
+            belowForMs >= this.config.closeConfirmMs &&
+            this.belowThresholdStreak >= this.config.closeConfirmMinFrames;
+
         let nowClosed = wasClosed;
-        if (!wasClosed && this.belowThresholdStreak >= this.config.closeConfirmFrames) {
+        if (!wasClosed && confirmed) {
             nowClosed = true;
         } else if (wasClosed && ear > threshold * this.config.hysteresisFactor) {
             nowClosed = false;
