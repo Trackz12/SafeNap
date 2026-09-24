@@ -7,6 +7,7 @@ export interface FeatureContext {
 }
 
 export interface FeatureExtractorOptions {
+    windowMs?: number;
     bufferSize?: number;
     minFramesForFeatures?: number;
     maxFrameGapMs?: number;
@@ -83,17 +84,43 @@ export function linearTrend(points: Array<{ t: number; v: number }>): number {
 
 // ── Classe principal ──
 
-const DEFAULT_BUFFER_SIZE = 10;
+/**
+ * Janela das features em TEMPO, nao em quadros (2026-09-24).
+ *
+ *   ANTES: `bufferSize = 10` QUADROS. Na cadencia medida de 8 FPS isso cobria
+ *          ~1,25 s. Ao subir o laco de deteccao para 30 FPS (ver
+ *          `vision/mediapipe.ts`), os mesmos 10 quadros passariam a cobrir
+ *          0,33 s, e tres features mudariam de significado sem que nenhuma
+ *          decisao sobre fadiga tivesse sido tomada:
+ *            - `earTrendPerSec` / `mouthTrendPerSec`: extrapolam uma taxa POR
+ *              SEGUNDO a partir de um terco de segundo de dados;
+ *            - `earStdDev`: desvio sobre 0,33 s em vez de 1,25 s.
+ *          As faixas com que o modelo sintetico foi gerado (ex.:
+ *          `earTrendPerSec ~ N(0, 0.01)` para alerta) foram escritas para a
+ *          janela longa.
+ *
+ *   DEPOIS: `DEFAULT_WINDOW_MS` governa a janela; `bufferSize` e apenas um teto
+ *           de memoria e `minFramesForFeatures` um piso de ruido. O significado
+ *           das features deixa de depender da velocidade da maquina.
+ *
+ * ENGINEERING PARAMETER / NEEDS VALIDATION: 1200 ms preserva aproximadamente a
+ * janela que existia de fato (~1,25 s a 8 FPS), para nao introduzir uma segunda
+ * mudanca de distribuicao junto com a correcao. Nao e um valor medido.
+ */
+const DEFAULT_WINDOW_MS = 1200;
+const DEFAULT_BUFFER_SIZE = 120;
 const DEFAULT_MIN_FRAMES = 3;
 const DEFAULT_MAX_FRAME_GAP_MS = 1000;
 
 export class FeatureExtractor {
+    private readonly windowMs: number;
     private readonly bufferSize: number;
     private readonly minFramesForFeatures: number;
     private readonly maxFrameGapMs: number;
     private buffer: BufferEntry[] = [];
 
     constructor(options?: FeatureExtractorOptions) {
+        this.windowMs = options?.windowMs ?? DEFAULT_WINDOW_MS;
         this.bufferSize = options?.bufferSize ?? DEFAULT_BUFFER_SIZE;
         this.minFramesForFeatures = options?.minFramesForFeatures ?? DEFAULT_MIN_FRAMES;
         this.maxFrameGapMs = options?.maxFrameGapMs ?? DEFAULT_MAX_FRAME_GAP_MS;
@@ -113,7 +140,11 @@ export class FeatureExtractor {
         if (last && now - last.t > this.maxFrameGapMs) this.buffer = [];
 
         this.buffer.push({ t: now, frame });
-        if (this.buffer.length > this.bufferSize) this.buffer.shift();
+        // Evicção por TEMPO primeiro (define o significado das features);
+        // bufferSize é só um teto de memória para cadências muito altas.
+        const cutoff = now - this.windowMs;
+        while (this.buffer.length > 0 && this.buffer[0].t < cutoff) this.buffer.shift();
+        while (this.buffer.length > this.bufferSize) this.buffer.shift();
     }
 
     public extract(

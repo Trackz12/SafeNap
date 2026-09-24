@@ -151,12 +151,23 @@ decidido isso. Convertidas para ms (`EAR_TREND_MIN_OBSERVATION_MS` = 2000,
 `EAR_TREND_RECENT_WINDOW_MS` = 1000), com `EAR_TREND_MIN_SAMPLES` reduzido a 8 e
 rebaixado ao papel de piso de ruído.
 
-**Acoplamento NÃO alterado, documentado:** o buffer do `featureExtractor` tem 10
-quadros, então a janela das features de ML passou de ~1,25 s para ~0,33 s. Isso
-NÃO afeta segurança (o ML é corroborativo e gated), mas é mais um motivo pelo
-qual o modelo ONNX precisa ser retreinado antes de qualquer alegação sobre sua
-acurácia. Mexer no buffer agora mudaria a semântica das features de novo, sem
-ganho de segurança.
+**Acoplamento corrigido em 2026-09-24:** o buffer do `featureExtractor` era de
+10 QUADROS, então a janela das features de ML caiu de ~1,25 s (a 8 FPS) para
+~0,33 s (a 30 FPS). Três features mudavam de significado junto:
+`earTrendPerSec` e `mouthTrendPerSec` passavam a extrapolar uma taxa **por
+segundo** a partir de um terço de segundo, e `earStdDev` media o desvio de um
+trecho muito menor do mesmo fenômeno. A janela agora é definida em tempo
+(`windowMs` = 1200 ms no `shared/feature_schema.json`, fonte única de verdade
+dos dois lados); `bufferSize` virou apenas teto de memória e `minFrames` piso de
+ruído. `shared/feature_golden.json` foi regenerado e a paridade Python↔TS
+verificada. O `drowsiness.onnx` e seu model card **não** registram a janela,
+então o artefato não precisou ser regerado.
+
+Testes que travam isso: o mesmo fenômeno (queda de EAR tardia, não linear) tem
+que produzir `earTrendPerSec` e `earStdDev` equivalentes a 8 e a 30 FPS
+(`featureExtractor.test.ts`). Um declínio *linear* não serve para esse teste —
+a inclinação de uma reta é a mesma em qualquer sub-janela —, por isso o cenário
+é deliberadamente não linear.
 
 ### Espelho Python
 
@@ -167,10 +178,26 @@ inferência — exatamente o desvio treino↔inferência que aquele módulo exis
 para evitar. A paridade é verificada por `frontend/src/ml/goldenParity.test.ts`
 e `ml/tests/test_golden_parity.py`.
 
-**Consequência para o modelo ONNX experimental:** ele foi treinado com a
-semântica ANTIGA de `perclos`/`blinkRate`. Como é corroborativo e já não
-validado, isso não afeta a segurança, mas **o modelo precisa ser retreinado**
-antes de qualquer alegação sobre sua acurácia. Ver *Riscos*.
+**Consequência para o modelo ONNX experimental — CORRIGIDO em 2026-09-24:**
+
+A redação anterior desta seção dizia que o modelo "foi treinado com a semântica
+ANTIGA de `perclos`/`blinkRate`" e por isso precisaria ser retreinado. **Isso
+estava errado.** Verificação em `ml/scripts/generate_realistic_model.py`: o
+modelo sintético nunca foi treinado com valores calculados pelo pipeline. Os
+`perclos` e `blinkRate` de treino são **faixas uniformes escritas à mão**
+(`rng.uniform(0.0, 0.10)` para alerta, `rng.uniform(0.25, 0.80)` para
+sonolento). Portanto:
+
+- **Não existe desvio treino↔inferência a corrigir por retreino** nessas duas
+  features. Regerar o modelo sintético produziria o mesmo arquivo.
+- O que de fato mudou é que o runtime passa a **atingir** essas faixas
+  não-validadas sob condições reais um pouco diferentes. Isso é uma questão de
+  calibração de faixas que nunca foram validadas — não se resolve treinando de
+  novo sobre as mesmas faixas.
+
+O motivo real e legítimo para retreinar continua existindo, mas é outro: o
+modelo nunca viu dados humanos. Isso exige dataset rotulado real e está
+bloqueado por acesso (ver *Datasets*).
 
 **NEEDS VALIDATION** (parâmetros de engenharia sem base experimental —
 sinalizados no código, não apresentados como "corretos"): o clamp do

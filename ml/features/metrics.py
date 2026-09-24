@@ -150,7 +150,10 @@ class FeatureExtractor:
     """Janela deslizante de frames → 18 features (espelha FeatureExtractor do frontend)."""
 
     def __init__(self, buffer_size: int = WINDOW["bufferSize"], min_frames: int = WINDOW["minFrames"],
-                 max_gap_ms: int = WINDOW["maxGapMs"]):
+                 max_gap_ms: int = WINDOW["maxGapMs"], window_ms: int = WINDOW["windowMs"]):
+        # window_ms governa a janela (fenomeno temporal); buffer_size e teto de
+        # memoria. Ver frontend/src/detection/featureExtractor.ts para o racional.
+        self.window_ms = window_ms
         self.buffer_size = buffer_size
         self.min_frames = min_frames
         self.max_gap_ms = max_gap_ms
@@ -169,7 +172,10 @@ class FeatureExtractor:
         if self.buffer and (t_ms - self.buffer[-1][0]) > self.max_gap_ms:
             self.buffer = []
         self.buffer.append((t_ms, frame))
-        if len(self.buffer) > self.buffer_size:
+        cutoff = t_ms - self.window_ms
+        while self.buffer and self.buffer[0][0] < cutoff:
+            self.buffer.pop(0)
+        while len(self.buffer) > self.buffer_size:
             self.buffer.pop(0)
 
     def extract(self, frame: Dict[str, float], t_ms: float, perclos: float, blink_rate: float,

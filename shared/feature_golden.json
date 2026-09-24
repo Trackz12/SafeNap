@@ -1798,18 +1798,18 @@
     "mouthAspect": 2.4999687519747,
     "noseDropRatio": 0.2660760420950957,
     "yawRatio": -0.06666666666666672,
-    "earMean": 0.3593701491815492,
-    "earStdDev": 0.08005905618387946,
+    "earMean": 0.3668206399888744,
+    "earStdDev": 0.07988662661447143,
     "earMin": 0.2547969636569223,
     "earMax": 0.441325548062126,
-    "earTrendPerSec": -0.03371782162063049,
+    "earTrendPerSec": -0.06254082025267368,
     "blinkRate": 14,
     "msSinceLastBlink": 1300,
     "perclos": 0.12,
-    "mouthMean": 1.6168495384890265,
+    "mouthMean": 1.4926401477416917,
     "mouthMax": 4.999854174666773,
-    "mouthTrendPerSec": 4.696232153950316,
-    "noseDropMean": 0.3082047487601526
+    "mouthTrendPerSec": 4.143221069197517,
+    "noseDropMean": 0.30437486633605654
    }
   },
   {
@@ -1966,18 +1966,18 @@
     "mouthAspect": 0.6668518132832106,
     "noseDropRatio": 0.2882490456030204,
     "yawRatio": 0.0,
-    "earMean": 0.3593701491815492,
-    "earStdDev": 0.08005905618387946,
+    "earMean": 0.37302938232831195,
+    "earStdDev": 0.07920911341716153,
     "earMin": 0.2547969636569223,
     "earMax": 0.441325548062126,
-    "earTrendPerSec": 0.0656220558096062,
+    "earTrendPerSec": -0.01945258939686494,
     "blinkRate": 14,
     "msSinceLastBlink": 1300,
     "perclos": 0.12,
-    "mouthMean": 1.658480095790513,
+    "mouthMean": 1.423824453203485,
     "mouthMax": 4.999854174666773,
-    "mouthTrendPerSec": 3.2671827110810714,
-    "noseDropMean": 0.31042204911094506
+    "mouthTrendPerSec": 2.869482232284643,
+    "noseDropMean": 0.3030310479416369
    }
   },
   {
@@ -2134,18 +2134,18 @@
     "mouthAspect": 0.33373815197924533,
     "noseDropRatio": 0.2660760420950957,
     "yawRatio": 0.0,
-    "earMean": 0.3579106563419225,
-    "earStdDev": 0.07867272027535313,
+    "earMean": 0.3771602467388925,
+    "earStdDev": 0.07743532991195588,
     "earMin": 0.2547969636569223,
     "earMax": 0.441325548062126,
-    "earTrendPerSec": 0.1570010632059791,
+    "earTrendPerSec": 0.002419527233692417,
     "blinkRate": 14,
     "msSinceLastBlink": 1300,
     "perclos": 0.12,
-    "mouthMean": 1.658480095790513,
+    "mouthMean": 1.3399716608016203,
     "mouthMax": 4.999854174666773,
-    "mouthTrendPerSec": 1.6614349004030229,
-    "noseDropMean": 0.3082047487601526
+    "mouthTrendPerSec": 1.8952240722154723,
+    "noseDropMean": 0.3001883551842106
    }
   },
   {
@@ -2302,18 +2302,18 @@
     "mouthAspect": 0.2505462402683452,
     "noseDropRatio": 0.2660760420950957,
     "yawRatio": 0.03333333333333336,
-    "earMean": 0.3608034643640584,
-    "earStdDev": 0.08111690163344068,
+    "earMean": 0.3771602467388925,
+    "earStdDev": 0.07743532991195588,
     "earMin": 0.2547969636569223,
     "earMax": 0.441325548062126,
-    "earTrendPerSec": 0.23882463605385837,
+    "earTrendPerSec": 0.04825188532150457,
     "blinkRate": 14,
     "msSinceLastBlink": 1300,
     "perclos": 0.12,
-    "mouthMean": 1.6418361809808206,
+    "mouthMean": 1.3399716608016203,
     "mouthMax": 4.999854174666773,
-    "mouthTrendPerSec": 0.06580784092888688,
-    "noseDropMean": 0.3082047487601526
+    "mouthTrendPerSec": 1.117063057547339,
+    "noseDropMean": 0.3001883551842106
    }
   }
  ],

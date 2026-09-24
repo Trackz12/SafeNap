@@ -215,3 +215,79 @@ describe('FeatureExtractor', () => {
         expect(v!.noseDropMean).toBeCloseTo(0.4, 5);
     });
 });
+
+describe('FeatureExtractor — janela em TEMPO, não em quadros (2026-09-24)', () => {
+    /**
+     * O mesmo fenômeno físico (EAR caindo 0,30 -> 0,20 ao longo de 1,2 s) deve
+     * produzir praticamente as mesmas features em cadências diferentes.
+     *
+     * Com a janela antiga de 10 QUADROS isso era falso: a 8 FPS os 10 quadros
+     * cobriam ~1,25 s e a 30 FPS cobriam 0,33 s, então `earTrendPerSec`
+     * extrapolava uma taxa por segundo a partir de um terço de segundo e
+     * `earStdDev` media o desvio de um trecho muito menor do mesmo declínio.
+     */
+    function declinioAt(frameMs: number) {
+        const ext = new FeatureExtractor({ minFramesForFeatures: 3 });
+        const durMs = 1200;
+        const n = Math.round(durMs / frameMs);
+        let v = null;
+        for (let i = 1; i <= n; i++) {
+            const t = i * frameMs;
+            const ear = 0.30 - 0.10 * (t / durMs); // 0,30 -> 0,20 linear
+            v = ext.extract(frame(ear), t, BASE_CONTEXT);
+        }
+        return v!;
+    }
+
+    /**
+     * Um declínio LINEAR tem a mesma inclinação em qualquer sub-janela, então
+     * não serve para discriminar janela-por-tempo de janela-por-quadro. O caso
+     * abaixo é deliberadamente NÃO linear: EAR estável por 900 ms e só então
+     * cai. Uma janela curta vê apenas a queda e reporta uma taxa muito mais
+     * íngreme do que o fenômeno de 1,2 s realmente tem.
+     */
+    function quedaTardiaAt(frameMs: number) {
+        const ext = new FeatureExtractor({ minFramesForFeatures: 3 });
+        const n = 1200 / frameMs; // 120 e 30 dividem 1200 exato
+        let v = null;
+        for (let i = 1; i <= n; i++) {
+            const t = i * frameMs;
+            const progresso = Math.min(1, Math.max(0, (t - 900) / 300));
+            const ear = 0.30 - 0.10 * progresso; // estável até 900ms, cai até 0,20
+            v = ext.extract(frame(ear), t, BASE_CONTEXT);
+        }
+        return v!;
+    }
+
+    it('earTrendPerSec de uma queda tardia é equivalente a 8 e a 30 FPS', () => {
+        const slow = quedaTardiaAt(120); // ~8 FPS
+        const fast = quedaTardiaAt(30);  // ~33 FPS
+        // Com janela de 10 QUADROS, a 30 FPS a janela cobriria apenas os
+        // últimos ~300 ms (a queda inteira) e a taxa reportada seria da ordem de
+        // -0,3/s, contra ~-0,09/s do fenômeno de 1,2 s. A tolerância de 0,02
+        // reprova essa divergência e aceita a diferença de amostragem.
+        expect(Math.abs(fast.earTrendPerSec - slow.earTrendPerSec)).toBeLessThan(0.02);
+    });
+
+    it('earStdDev é equivalente a 8 e a 30 FPS', () => {
+        const slow = declinioAt(125);
+        const fast = declinioAt(33);
+        expect(fast.earStdDev).toBeCloseTo(slow.earStdDev, 2);
+    });
+
+    it('a janela cobre o tempo configurado, independente da cadência', () => {
+        const slow = declinioAt(125);
+        const fast = declinioAt(33);
+        // Ambas próximas de 1200ms (limitadas pela granularidade do quadro),
+        // enquanto 10 quadros dariam ~1125ms e ~297ms respectivamente.
+        expect(slow.windowDurationMs).toBeGreaterThan(1000);
+        expect(fast.windowDurationMs).toBeGreaterThan(1000);
+    });
+
+    it('bufferSize permanece como teto de memória', () => {
+        const ext = new FeatureExtractor({ bufferSize: 5, minFramesForFeatures: 3, windowMs: 60000 });
+        for (let i = 1; i <= 20; i++) ext.extract(frame(0.3), i * 10, BASE_CONTEXT);
+        const v = ext.extract(frame(0.3), 210, BASE_CONTEXT);
+        expect(v!.windowSize).toBeLessThanOrEqual(5);
+    });
+});

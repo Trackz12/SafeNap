@@ -9,10 +9,12 @@
   ],
   "nullBlinkSentinel": -1,
   "window": {
-    "bufferSize": 10,
+    "windowMs": 1200,
+    "bufferSize": 120,
     "minFrames": 3,
     "maxGapMs": 1000,
-    "targetFps": 10
+    "targetFps": 30,
+    "note": "A janela e definida em TEMPO (windowMs), nao em quadros. Antes de 2026-09-24 era bufferSize=10 quadros, que na cadencia medida de 8 FPS cobria ~1,25s; ao subir o laco para 30 FPS os mesmos 10 quadros passariam a cobrir 0,33s, mudando o significado de earStdDev, earTrendPerSec e mouthTrendPerSec sem que nenhuma decisao sobre fadiga tivesse sido tomada. bufferSize passa a ser apenas um teto de memoria; minFrames e piso de ruido."
   },
   "units": {
     "ear": "razão adimensional (média de 4 distâncias verticais / distância horizontal do olho, 3D, coordenadas normalizadas MediaPipe)",
