@@ -1,0 +1,76 @@
+{
+  "question": "O ONNX experimental pode atrapalhar a deteccao?",
+  "model": "frontend/public/models/drowsiness.onnx",
+  "thresholds": {
+    "rampStart": 0.7,
+    "mlWarning": 0.85,
+    "mlAlarm": 0.95
+  },
+  "awakeDefinition": {
+    "perclosMax": 0.08,
+    "earTrendMin": -0.01,
+    "earStdDevMax": 0.035
+  },
+  "totalAwakeStates": 20736,
+  "atOrAboveRampStart": {
+    "count": 6912,
+    "fraction": 0.3333333333333333
+  },
+  "atOrAboveMlWarning": {
+    "count": 3456,
+    "fraction": 0.16666666666666666
+  },
+  "atOrAboveMlAlarm": {
+    "count": 0,
+    "fraction": 0.0
+  },
+  "worstAwakeCase": {
+    "params": {
+      "ear": 0.13,
+      "mouth": 0.15,
+      "nose": 0.25,
+      "blink": 6,
+      "perclos": 0.0,
+      "std": 0.035,
+      "trend": 0.0,
+      "msb": 1000,
+      "yaw": 0.02
+    },
+    "p_drowsy": 0.8941663503646851
+  },
+  "absoluteEarIsolation": [
+    {
+      "ear": 0.35,
+      "p_drowsy": 0.3924999237060547
+    },
+    {
+      "ear": 0.3,
+      "p_drowsy": 0.3924999237060547
+    },
+    {
+      "ear": 0.24,
+      "p_drowsy": 0.534500002861023
+    },
+    {
+      "ear": 0.2,
+      "p_drowsy": 0.6661665439605713
+    },
+    {
+      "ear": 0.18,
+      "p_drowsy": 0.6661665439605713
+    },
+    {
+      "ear": 0.16,
+      "p_drowsy": 0.6661665439605713
+    },
+    {
+      "ear": 0.14,
+      "p_drowsy": 0.6661665439605713
+    },
+    {
+      "ear": 0.12,
+      "p_drowsy": 0.6661665439605713
+    }
+  ],
+  "caveat": "Grade sintetica de estados plausiveis, NAO uma amostra de pessoas reais. Mede a resposta do modelo a vetores nas escalas que o frontend produz; nao mede a prevalencia desses estados na populacao."
+}

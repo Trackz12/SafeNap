@@ -31,8 +31,13 @@ describe('DetectionEngine presets', () => {
         expect(engine.getPreset()).toBe('strict');
     });
 
-    it('getMode defaults to hybrid', () => {
-        expect(engine.getMode()).toBe('hybrid');
+    // MUDANCA DE COMPORTAMENTO (2026-09-24): o padrao era 'hybrid'. A sonda
+    // `ml/scripts/probe_ml_false_positives.py` mediu que 16,7% dos estados
+    // inequivocamente acordados gerariam ML_WARNING sozinhos, porque as features
+    // do ML usam EAR ABSOLUTO enquanto as regras usam EAR relativo a calibracao.
+    // Ver a docstring de `detectionMode` em detectionEngine.ts.
+    it('getMode defaults to rules (ML fora do caminho de decisao)', () => {
+        expect(engine.getMode()).toBe('rules');
     });
 
     it('setMode and getMode round-trip', () => {
@@ -261,6 +266,10 @@ describe('DetectionEngine — score ML travado não trava o ALARM para sempre', 
         calibrationManager.skipWithDefault(); // threshold padrão 0.25
         metricsStore.reset();
         engine = new DetectionEngine();
+        // Esta bateria testa a POLITICA HIBRIDA, que continua existindo — ela
+        // deixou de ser o padrao em 2026-09-24, entao passou a ser pedida
+        // explicitamente.
+        engine.setMode('hybrid');
         t = 1_000_000;
         vi.useFakeTimers();
         vi.setSystemTime(t);
@@ -331,6 +340,10 @@ describe('DetectionEngine — processNoFace não deixa o rastreador de micro-son
         calibrationManager.skipWithDefault();
         metricsStore.reset();
         engine = new DetectionEngine();
+        // Esta bateria testa a POLITICA HIBRIDA, que continua existindo — ela
+        // deixou de ser o padrao em 2026-09-24, entao passou a ser pedida
+        // explicitamente.
+        engine.setMode('hybrid');
         t = 1_000_000;
         vi.useFakeTimers();
         vi.setSystemTime(t);
@@ -387,6 +400,10 @@ describe('DetectionEngine — SLOW_BLINKS não deve confundir piscada normal com
         calibrationManager.skipWithDefault();
         metricsStore.reset();
         engine = new DetectionEngine();
+        // Esta bateria testa a POLITICA HIBRIDA, que continua existindo — ela
+        // deixou de ser o padrao em 2026-09-24, entao passou a ser pedida
+        // explicitamente.
+        engine.setMode('hybrid');
         t = 1_000_000;
         vi.useFakeTimers();
         vi.setSystemTime(t);
@@ -472,6 +489,10 @@ describe('DetectionEngine — não avalia com calibração inválida mesmo depoi
         calibrationManager.clearCalibration();
         metricsStore.reset();
         engine = new DetectionEngine();
+        // Esta bateria testa a POLITICA HIBRIDA, que continua existindo — ela
+        // deixou de ser o padrao em 2026-09-24, entao passou a ser pedida
+        // explicitamente.
+        engine.setMode('hybrid');
         t = 1_000_000;
         vi.useFakeTimers();
         vi.setSystemTime(t);

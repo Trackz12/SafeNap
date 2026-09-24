@@ -288,7 +288,46 @@ export class DetectionEngine {
     private lastHeartbeatAt = 0;
 
     private lastFeatureVector: FeatureVector | null = null;
-    private detectionMode: DetectionMode = 'hybrid';
+    /**
+     * Modo de deteccao. Padrao 'rules' desde 2026-09-24 (MUDANCA DE COMPORTAMENTO).
+     *
+     *   ANTES: 'hybrid' — o score do ONNX experimental participava da decisao, e
+     *          nada no app chamava setMode(), entao esse caminho estava
+     *          permanentemente ligado, sem forma de desligar.
+     *
+     *   MEDIDO (`ml/scripts/probe_ml_false_positives.py`, relatorio em
+     *          `reports/ml_probe/`): sobre 20.736 estados INEQUIVOCAMENTE
+     *          acordados (perclos <= 0,08, sem declinio de palpebra, EAR
+     *          estavel), 33,3% cruzavam 0,70 e passavam a somar no score de
+     *          fusao, e 16,7% cruzavam 0,85 e gerariam ML_WARNING SOZINHOS, sem
+     *          nenhuma regra fisiologica ativa. Pior caso acordado: P=0,894.
+     *
+     *   CAUSA: as features do ML usam EAR ABSOLUTO; as regras usam EAR RELATIVO
+     *          ao limiar calibrado da pessoa. A calibracao — defesa central do
+     *          projeto contra variacao entre pessoas — nao protege o caminho de
+     *          ML. Uma pessoa de olhos naturalmente estreitos e "sonolenta" para
+     *          o modelo por construcao (P=0,666 com EAR absoluto <= 0,20,
+     *          independente de quao aberta ela esteja para si mesma). Somado a
+     *          isso, as faixas de `noseDropRatio` do gerador sintetico (0,0-0,08)
+     *          nao correspondem a escala real do frontend (~0,30), o que da um
+     *          vies constante de ~+0,39.
+     *
+     *   E NAO HAVIA BENEFICIO COMPENSANDO: para sonolencia real o score satura
+     *          em 1,000, mas nesses casos as regras fortes (PERCLOS,
+     *          EYES_CLOSED_DURATION, MICROSLEEP) ja dispararam. O ML nao
+     *          adicionava deteccao, so superficie de falso positivo.
+     *
+     *   DEPOIS: 'rules'. O ML continua sendo INFERIDO e publicado em
+     *          `DetectionMetrics.mlScore` (leitura experimental visivel), mas
+     *          `fuseSignals` o ignora por completo e ele nao bloqueia mais a
+     *          liberacao de ALARM. O modo 'hybrid' segue disponivel via
+     *          setMode() para experimentacao.
+     *
+     *   REVERTER: trocar o valor abaixo por 'hybrid'. Antes de reverter, rodar a
+     *          sonda de novo — se o modelo for retreinado com dado real, os
+     *          numeros acima mudam e a decisao deve ser reavaliada com eles.
+     */
+    private detectionMode: DetectionMode = 'rules';
     private lastMlScore: number | null = null;
 
     constructor(clock: Clock = systemClock) {
