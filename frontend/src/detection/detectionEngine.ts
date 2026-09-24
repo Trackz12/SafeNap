@@ -223,9 +223,15 @@ const EAR_SMOOTHING_WINDOW = 3;
  * 2 significa apenas "um quadro isolado nunca decide nada".
  */
 const CONFIRM_MIN_FRAMES = 2;
-// Amostras mínimas/recentes da tendência de EAR — ver EarTrendTracker.
-const EAR_TREND_MIN_SAMPLES = 20;
-const EAR_TREND_RECENT_SAMPLES = 10;
+/**
+ * Janelas da tendência de EAR. Em MILISSEGUNDOS desde 2026-09-24: eram
+ * contagens de amostra (20/10), que valiam ~2,5s a 8 FPS e passariam a valer
+ * 0,67s ao subir o laço para 30 FPS — ver `temporal/earTrendTracker.ts`.
+ * `EAR_TREND_MIN_SAMPLES` sobrevive apenas como piso de ruído.
+ */
+const EAR_TREND_MIN_OBSERVATION_MS = 2000;
+const EAR_TREND_RECENT_WINDOW_MS = 1000;
+const EAR_TREND_MIN_SAMPLES = 8;
 
 function isEyeClosedish(state: EyeState): boolean {
     return state === 'CLOSED' || state === 'OPENING';
@@ -346,8 +352,9 @@ export class DetectionEngine {
     private earTrendConfig() {
         return {
             windowMs: this.config.earTrendWindowMs,
+            minObservationMs: EAR_TREND_MIN_OBSERVATION_MS,
+            recentWindowMs: EAR_TREND_RECENT_WINDOW_MS,
             minSamples: EAR_TREND_MIN_SAMPLES,
-            recentSampleCount: EAR_TREND_RECENT_SAMPLES,
         };
     }
     private fusionThresholds(): FusionThresholds {

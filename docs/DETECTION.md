@@ -69,7 +69,7 @@ código e em testes dedicados.
 | # | Achado | Efeito | Correção |
 |---|--------|--------|----------|
 | 1 | `vision/mediapipe.ts` **descartava silenciosamente** o quadro quando o MediaPipe achava rosto mas `analyzeFrame` rejeitava a geometria — nem `processFrame` nem `processNoFace` eram chamados | FN (tempo não observado entrava no denominador do PERCLOS) **e FP** (`closedSince`/candidato a micro-sono sobreviviam ao intervalo ⇒ ao voltar um quadro válido, `closedForMs` incluía o buraco inteiro ⇒ alarme falso) | rotear para `processNoFace('DEGRADED')` |
-| 2 | confirmação de fechamento por **contagem de quadros** (`closeConfirmFrames`) enquanto o laço real roda a **~10 FPS** ⇒ "3 quadros" = ~300 ms | FN sistemático: piscada de 200 ms nunca confirmava ⇒ `blinkRate` ≈ 0, nada entrava no PERCLOS, feature de ML inútil. Comportamento mudava com o FPS da máquina | `closeConfirmMs` (tempo) + `closeConfirmMinFrames` (piso de ruído) |
+| 2 | confirmação de fechamento por **contagem de quadros** (`closeConfirmFrames`) enquanto o laço real rodava a **8 FPS medidos** ⇒ "3 quadros" ≈ 375 ms | FN sistemático: piscada de 200 ms nunca confirmava ⇒ `blinkRate` ≈ 0, nada entrava no PERCLOS, feature de ML inútil. Comportamento mudava com o FPS da máquina | `closeConfirmMs` (tempo) + `closeConfirmMinFrames` (piso de ruído) |
 | 3 | `validObservedMs = windowMs - lostMs` assumia a janela inteira observada desde o 1º quadro | FN: aos 5 s de sessão com 4 s de olho fechado o PERCLOS reportava 6,7% em vez de 80%; `confidence` era calculada e **nunca consumida** | denominador cresce com a sessão; `sufficient` gate consumido por `FusionInputs.perclosValid` |
 | 4 | `microsleepWarnMs` e `earTrendAlarmFraction` existiam nos 3 presets e **nunca eram lidos** | falsa promessa arquitetural | removidos (ver *Configuração removida*) |
 | 5 | `YawnDetector.active` só caía no ramo "boca fechada" e só após `cooldownMs` | FP: 10 s de WARNING por abertura de 400 ms; com a boca continuamente aberta (falar/rir/cantar) `active` **nunca caía** | `maxMs` + `activeHoldMs`; `cooldownMs` passa a ser guarda de re-disparo |
@@ -99,6 +99,55 @@ mediana-3 do EAR, `EAR_TREND_MIN_SAMPLES`). A bateria
 `detectionEngine.robustness.test.ts` roda os mesmos roteiros a 10, 30 e 60 FPS
 e verifica que piscadas são contadas e que a latência até o ALARM não varia
 por ordem de grandeza.
+
+### Cadência do laço de detecção (2026-09-24)
+
+O próximo passo recomendado pela auditoria era elevar o FPS, porque um período
+de amostragem longo impõe um **teto de resolução temporal** a todos os
+fenômenos oculares — que agora são medidos em ms, mas não podem ser observados
+com granularidade melhor que o período do laço.
+
+**Medido em navegador real** (`frontend/tests/e2e/detection-rate.spec.ts`, que
+ativa a câmera e lê a instrumentação do app):
+
+| | Cadência medida | Período |
+|---|---|---|
+| Antes (`setTimeout(100 ms)` fixo + `requestAnimationFrame`) | **8 FPS** | ~125 ms |
+| Depois (orçamento de quadro adaptativo) | **30 FPS** | ~33 ms |
+
+Os dois números são medição, não estimativa: o valor "antes" foi obtido
+revertendo o trecho e rodando o mesmo teste. O teste é guarda de regressão —
+falha se a cadência voltar ao patamar antigo.
+
+O laço agora espera **o que resta** do orçamento de quadro (`TARGET_FRAME_MS`,
+33 ms) depois da detecção, em vez de somar uma espera fixa ao custo do
+trabalho. Dois pisos protegem a interface: `MIN_LOOP_DELAY_MS` (8 ms) e um teto
+de ciclo de trabalho (`MAX_DUTY_CYCLE`, 0,5 — a espera nunca é menor que o
+tempo gasto detectando). Numa máquina lenta a cadência cai sozinha em vez de
+travar a página. O `requestAnimationFrame` saiu do caminho de agendamento: ele
+adicionava até ~17 ms de jitter e fazia a detecção **parar por completo** quando
+a aba não estava pintando.
+
+**Contador de FPS da interface corrigido.** Ele media `requestAnimationFrame`,
+isto é a taxa de RENDER do navegador (~60), e exibia isso rotulado como "FPS" ao
+lado do vídeo. Era um número verdadeiro sobre a coisa errada: quem lesse
+"60 FPS" concluiria que o sistema analisa 60 quadros por segundo, quando a
+detecção rodava a 8. Agora vem de `mediaPipeManager.getDetectionFps()`.
+
+**Acoplamento corrigido junto (senão o aumento de FPS seria uma regressão):** as
+janelas do EAR trend eram contagens de amostra (20 mínimas / 10 recentes). A
+30 FPS as mesmas 20 amostras valeriam 0,67 s em vez de ~2,5 s, e `EAR_TREND` —
+que é **regra forte** de WARNING — ficaria 3,75x mais sensível sem ninguém ter
+decidido isso. Convertidas para ms (`EAR_TREND_MIN_OBSERVATION_MS` = 2000,
+`EAR_TREND_RECENT_WINDOW_MS` = 1000), com `EAR_TREND_MIN_SAMPLES` reduzido a 8 e
+rebaixado ao papel de piso de ruído.
+
+**Acoplamento NÃO alterado, documentado:** o buffer do `featureExtractor` tem 10
+quadros, então a janela das features de ML passou de ~1,25 s para ~0,33 s. Isso
+NÃO afeta segurança (o ML é corroborativo e gated), mas é mais um motivo pelo
+qual o modelo ONNX precisa ser retreinado antes de qualquer alegação sobre sua
+acurácia. Mexer no buffer agora mudaria a semântica das features de novo, sem
+ganho de segurança.
 
 ### Espelho Python
 
@@ -153,7 +202,7 @@ A detecção roda **100% no navegador** (regra de privacidade: nenhum frame de v
 ## Detecção de olhos fechados (com histerese e confirmação)
 
 - O EAR passa por um **filtro de mediana** (janela de 3 frames) antes da avaliação — mata picos de jitter de 1 frame sem o atraso médio de um EMA (ver seção *Suavização do EAR*).
-- Olhos só são marcados como fechados após **tempo contínuo abaixo do threshold** (`closeConfirmMs`: 150 ms no leve, 90 ms no padrão, 60 ms no alta) **e** um piso de 2 quadros consecutivos. O tempo é a unidade do fenômeno fisiológico; os quadros são só proteção contra ruído. Antes de 2026-09-23 a regra era contagem pura de quadros, o que a ~10 FPS (cadência real do laço) equivalia a ~300 ms no preset padrão e tornava piscadas de 200 ms **invisíveis** — ver *Auditoria de qualidade*, achado nº 2.
+- Olhos só são marcados como fechados após **tempo contínuo abaixo do threshold** (`closeConfirmMs`: 150 ms no leve, 90 ms no padrão, 60 ms no alta) **e** um piso de 2 quadros consecutivos. O tempo é a unidade do fenômeno fisiológico; os quadros são só proteção contra ruído. Antes de 2026-09-23 a regra era contagem pura de quadros, o que na cadência medida de 8 FPS equivalia a ~375 ms no preset padrão e tornava piscadas de 200 ms **invisíveis** — ver *Auditoria de qualidade*, achado nº 2.
 - Só reabrem quando `EAR > threshold × hysteresisFactor` (padrão 1.15) — evita flicker de estado quando o EAR oscila perto do limite.
 - Cada segmento fechado é registrado (início/fim) para PERCLOS e contagem de piscadas (duração entre 50–400ms conta como piscada).
 
@@ -195,7 +244,7 @@ segundos tinha exatamente o mesmo peso de uma calculada sobre a janela cheia.
 O PERCLOS é uma métrica de **janela de 60s**: um micro-sono isolado de 1.5–3s fica diluído na média e demora a escalar a severidade. O detector de micro-sono reage ao **evento agudo** em tempo real:
 
 - **Gatilho:** EAR < `threshold × microsleepThresholdFactor` (0.55 — olho *bem* fechado, não mero semi-fechado) sustentado por `microsleepAlarmMs` (600–2000ms conforme preset).
-- **Confirmação:** exige um piso de 2 quadros consecutivos (`CONFIRM_MIN_FRAMES`) além da duração. Como `microsleepAlarmMs` (1500–2000 ms) já corresponde a ~15–20 quadros a 10 FPS, o piso de quadros nunca é a restrição decisiva aqui — é apenas coerência com o fechamento normal.
+- **Confirmação:** exige um piso de 2 quadros consecutivos (`CONFIRM_MIN_FRAMES`) além da duração. Como `microsleepAlarmMs` (1500–2000 ms) corresponde a dezenas de quadros em qualquer cadência praticada, o piso de quadros nunca é a restrição decisiva aqui — é apenas coerência com o fechamento normal.
 - **Cooldown** (`microsleepCooldownMs`, 8–12s): evita re-alarmar dentro da mesma onda de sonolência.
 - **Prioridade máxima:** se micro-sono e outra razão disparam juntos, `MICROSLEEP` vence (é o sinal mais crítico).
 
@@ -208,7 +257,7 @@ Sonolência real **evolui gradualmente**: a pálpebra desce aos poucos (fadiga m
 - **Buffer de tendência:** amostras de EAR **suavizado** (filtro de mediana-3, o mesmo usado para fechamento) coletadas **apenas com olhos abertos** (piscadas não contaminam o declínio) numa janela de 60s (`longEarBuffer`).
 - **Sinal:** fração de declínio da **média das últimas 10 amostras** suavizadas vs `baselineEar` calibrado. Se `(baseline - recent) / baseline > earTrendWarnFraction` (15–20% conforme preset), dispara WARNING `EAR_TREND`.
 - **Requer calibração:** sem baseline calibrado não há tendência (retorna null — não dispara com o threshold padrão).
-- **Alvo exato:** 20 amostras mínimas (~2s de dados) antes de avaliar — evita disparo por ruído de poucos frames.
+- **Tempo mínimo:** as amostras precisam cobrir `EAR_TREND_MIN_OBSERVATION_MS` (2000 ms) de relógio, mais um piso de 8 amostras. Em MILISSEGUNDOS desde 2026-09-24: eram 20 amostras, que valiam ~2,5 s a 8 FPS mas passariam a valer 0,67 s ao subir o laço para 30 FPS — o sinal ficaria 3,75x mais sensível sem ninguém ter decidido isso. A média "recente" também é temporal (`EAR_TREND_RECENT_WINDOW_MS`, 1000 ms) em vez de "as últimas 10 amostras".
 - **Anti-falso-positivo:** a média das últimas 10 amostras suavizadas exige um declínio **sustentado** — um frame isolado de jitter (queda brusca de EAR por 1 frame, comum no MediaPipe) não consegue simular pálpebra caindo gradualmente.
 
 Isso dá ao sistema a capacidade de avisar o motorista **antes** do fechamento crítico: "pálpebras pesando" em vez de esperar o micro-sono.

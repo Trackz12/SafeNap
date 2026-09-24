@@ -115,27 +115,24 @@ export const CameraView: React.FC = () => {
         };
     }, []);
 
-    // FPS counter — só roda quando a câmera está ativa
+    // Cadência de DETECÇÃO — só roda quando a câmera está ativa.
+    //
+    // CORRIGIDO (2026-09-24): este contador media `requestAnimationFrame`, ou
+    // seja a taxa de RENDER do navegador (~60), e exibia isso como "FPS" ao lado
+    // do vídeo. Era um número verdadeiro sobre a coisa errada: a detecção rodava
+    // a ~10 quadros/s. Quem lesse "60 FPS" concluiria que o SafeNap analisa 60
+    // quadros por segundo — e como toda a resolução temporal do sistema depende
+    // dessa taxa (ver `detection/eye/eyeStateDetector.ts`), o número enganoso
+    // escondia exatamente o gargalo que importa. Agora vem do laço real.
     useEffect(() => {
         if (!isActive) {
             setFps(0);
             return;
         }
-
-        let frameCount = 0;
-        let lastCount = performance.now();
-        let rafHandle: number;
-        const countLoop = (t: number) => {
-            frameCount++;
-            if (t - lastCount >= 1000) {
-                setFps(Math.round((frameCount * 1000) / (t - lastCount)));
-                frameCount = 0;
-                lastCount = t;
-            }
-            rafHandle = requestAnimationFrame(countLoop);
-        };
-        rafHandle = requestAnimationFrame(countLoop);
-        return () => cancelAnimationFrame(rafHandle);
+        const poll = () => setFps(Math.round(mediaPipeManager.getDetectionFps()));
+        poll();
+        const handle = setInterval(poll, 1000);
+        return () => clearInterval(handle);
     }, [isActive]);
 
     const toggleCamera = useCallback(async () => {
