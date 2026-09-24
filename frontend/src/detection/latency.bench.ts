@@ -26,6 +26,7 @@ const steadyFrame: FrameAnalysis = {
     mouthAspect: 0.2,
     noseDropRatio: 0.3,
     yawRatio: 0,
+    quality: 'GOOD',
 };
 
 describe('DetectionEngine.processFrame (regime normal, sem transição de estado)', () => {

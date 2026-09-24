@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { YawnDetector } from './yawnDetector';
 import { FakeClock } from '../temporal/clock';
 
-const CONFIG = { mouthAspectThreshold: 0.65, minMs: 400, cooldownMs: 10000 };
+const CONFIG = {
+    mouthAspectThreshold: 0.65,
+    minMs: 400,
+    maxMs: 7000,
+    activeHoldMs: 2000,
+    cooldownMs: 10000,
+};
 
 describe('YawnDetector', () => {
     let clock: FakeClock;

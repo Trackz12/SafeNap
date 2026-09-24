@@ -15,6 +15,7 @@ import { MicrosleepDetector } from './eye/microsleepDetector';
 import { HeadDropDetector } from './head/headDropDetector';
 import { YawnDetector } from './mouth/yawnDetector';
 import { EarTrendTracker } from './temporal/earTrendTracker';
+import type { VisionQuality } from './vision/visionQuality';
 import {
     fuseSignals,
     type DetectionState,
@@ -30,6 +31,17 @@ export interface DetectionMetrics {
     state: DetectionState;
     reason: AlarmReason | WarningReason | null;
     facePresent: boolean;
+    /**
+     * Qualidade do sinal de visão neste quadro (auditoria de qualidade,
+     * 2026-09-23, achado nº 1). Distingue os três casos que antes eram
+     * colapsados em `facePresent: boolean`:
+     *   GOOD     — rosto frontal, EAR binocular confiável;
+     *   DEGRADED — rosto visível mas o sinal ocular não é confiável (perfil
+     *              acentuado, ou geometria rejeitada pelo frameAnalyzer);
+     *   LOST     — nenhum rosto detectado.
+     * REPORTADO, não usado para ponderar decisão — ver frameAnalyzer.ts.
+     */
+    visionQuality: VisionQuality;
     faceLostForMs: number;
     eyesClosed: boolean;
     closedForMs: number;
@@ -60,17 +72,22 @@ interface DetectionConfig {
     maxBlinkMs: number;
     yawnMouthAspect: number;
     yawnMinMs: number;
+    /** Abertura de boca mais longa que isto não é bocejo — ver mouth/yawnDetector.ts. */
+    yawnMaxMs: number;
+    /** Persistência de yawnActive após a boca fechar (anti-flicker). */
+    yawnActiveHoldMs: number;
     yawnCooldownMs: number;
     headDropMargin: number;
     headDropMinMs: number;
-    closeConfirmFrames: number;
+    /** Tempo abaixo do limiar pra confirmar fechamento — ver eye/eyeStateDetector.ts. */
+    closeConfirmMs: number;
     perclosIgnoreMs: number;
+    /** Observação válida mínima pro PERCLOS valer na decisão — ver eye/perclosTracker.ts. */
+    perclosMinObservationMs: number;
     microsleepThresholdFactor: number;
-    microsleepWarnMs: number;
     microsleepAlarmMs: number;
     microsleepCooldownMs: number;
     earTrendWarnFraction: number;
-    earTrendAlarmFraction: number;
     earTrendWindowMs: number;
     slowBlinkMinObservationMs: number;
     slowBlinkMinMs: number;
@@ -92,17 +109,18 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         maxBlinkMs: 400,
         yawnMouthAspect: 0.70,
         yawnMinMs: 400,
+        yawnMaxMs: 7000,
+        yawnActiveHoldMs: 2000,
         yawnCooldownMs: 10000,
         headDropMargin: 0.08,
         headDropMinMs: 2500,
-        closeConfirmFrames: 4,
+        closeConfirmMs: 150,
         perclosIgnoreMs: 400,
+        perclosMinObservationMs: 20000,
         microsleepThresholdFactor: 0.55,
-        microsleepWarnMs: 900,
         microsleepAlarmMs: 2000,
         microsleepCooldownMs: 12000,
         earTrendWarnFraction: 0.20,
-        earTrendAlarmFraction: 0.40,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
         slowBlinkMinMs: 700,
@@ -122,17 +140,18 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         maxBlinkMs: 400,
         yawnMouthAspect: 0.65,
         yawnMinMs: 400,
+        yawnMaxMs: 7000,
+        yawnActiveHoldMs: 2000,
         yawnCooldownMs: 10000,
         headDropMargin: 0.07,
         headDropMinMs: 2000,
-        closeConfirmFrames: 3,
+        closeConfirmMs: 90,
         perclosIgnoreMs: 400,
+        perclosMinObservationMs: 20000,
         microsleepThresholdFactor: 0.55,
-        microsleepWarnMs: 800,
         microsleepAlarmMs: 1800,
         microsleepCooldownMs: 10000,
         earTrendWarnFraction: 0.18,
-        earTrendAlarmFraction: 0.35,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
         slowBlinkMinMs: 550,
@@ -152,17 +171,18 @@ const PRESETS: Record<PresetName, DetectionConfig> = {
         maxBlinkMs: 400,
         yawnMouthAspect: 0.60,
         yawnMinMs: 350,
+        yawnMaxMs: 7000,
+        yawnActiveHoldMs: 2000,
         yawnCooldownMs: 8000,
         headDropMargin: 0.05,
         headDropMinMs: 1500,
-        closeConfirmFrames: 2,
+        closeConfirmMs: 60,
         perclosIgnoreMs: 400,
+        perclosMinObservationMs: 20000,
         microsleepThresholdFactor: 0.55,
-        microsleepWarnMs: 600,
         microsleepAlarmMs: 1500,
         microsleepCooldownMs: 8000,
         earTrendWarnFraction: 0.15,
-        earTrendAlarmFraction: 0.30,
         earTrendWindowMs: 60000,
         slowBlinkMinObservationMs: 30000,
         slowBlinkMinMs: 450,
@@ -175,6 +195,7 @@ export const DEFAULT_METRICS: DetectionMetrics = {
     state: 'NORMAL',
     reason: null,
     facePresent: false,
+    visionQuality: 'LOST',
     faceLostForMs: 0,
     eyesClosed: false,
     closedForMs: 0,
@@ -193,6 +214,15 @@ export const DEFAULT_METRICS: DetectionMetrics = {
 // Janela do filtro de mediana aplicado ao EAR (em frames). 3 elimina picos
 // isolados de jitter mantendo resposta rápida a fechamento real (~200ms).
 const EAR_SMOOTHING_WINDOW = 3;
+/**
+ * Piso de quadros consecutivos para confirmar fechamento/micro-sono.
+ *
+ * Isto é proteção contra ruído, NÃO unidade de tempo — a duração é medida em
+ * ms (`closeConfirmMs`, `microsleepAlarmMs`). Ver §14 da auditoria: "frames
+ * podem ser usados para proteção contra ruído e mínimo de amostras válidas".
+ * 2 significa apenas "um quadro isolado nunca decide nada".
+ */
+const CONFIRM_MIN_FRAMES = 2;
 // Amostras mínimas/recentes da tendência de EAR — ver EarTrendTracker.
 const EAR_TREND_MIN_SAMPLES = 20;
 const EAR_TREND_RECENT_SAMPLES = 10;
@@ -270,7 +300,8 @@ export class DetectionEngine {
 
     private eyeStateConfig() {
         return {
-            closeConfirmFrames: this.config.closeConfirmFrames,
+            closeConfirmMs: this.config.closeConfirmMs,
+            closeConfirmMinFrames: CONFIRM_MIN_FRAMES,
             hysteresisFactor: this.config.hysteresisFactor,
             smoothingWindow: EAR_SMOOTHING_WINDOW,
         };
@@ -286,14 +317,18 @@ export class DetectionEngine {
         };
     }
     private perclosConfig() {
-        return { windowMs: this.config.perclosWindowMs, ignoreMs: this.config.perclosIgnoreMs };
+        return {
+            windowMs: this.config.perclosWindowMs,
+            ignoreMs: this.config.perclosIgnoreMs,
+            minObservationMs: this.config.perclosMinObservationMs,
+        };
     }
     private microsleepConfig() {
         return {
             thresholdFactor: this.config.microsleepThresholdFactor,
             alarmMs: this.config.microsleepAlarmMs,
             cooldownMs: this.config.microsleepCooldownMs,
-            confirmFrames: this.config.closeConfirmFrames,
+            confirmFrames: CONFIRM_MIN_FRAMES,
         };
     }
     private headDropConfig() {
@@ -303,6 +338,8 @@ export class DetectionEngine {
         return {
             mouthAspectThreshold: this.config.yawnMouthAspect,
             minMs: this.config.yawnMinMs,
+            maxMs: this.config.yawnMaxMs,
+            activeHoldMs: this.config.yawnActiveHoldMs,
             cooldownMs: this.config.yawnCooldownMs,
         };
     }
@@ -435,10 +472,17 @@ export class DetectionEngine {
         metricsStore.publish({ ...DEFAULT_METRICS, threshold: calibrationManager.getThreshold() });
     }
 
-    public processNoFace(): void {
+    /**
+     * Nenhum EAR confiável neste quadro. `quality` distingue "não vejo rosto"
+     * (`LOST`) de "vejo rosto mas a geometria não serve" (`DEGRADED`) — ver
+     * `vision/mediapipe.ts`. A DECISÃO é idêntica nos dois casos (sem EAR
+     * confiável não se avalia sonolência); `quality` só muda o que a UI mostra.
+     */
+    public processNoFace(quality: Extract<VisionQuality, 'LOST' | 'DEGRADED'> = 'LOST'): void {
         const now = this.clock.now();
         this.sessionStart(now);
         sessionStats.markStarted(now);
+        this.perclosTracker.markObservationStart(now);
 
         this.facePresent = false;
         if (this.faceLostSince === null) {
@@ -470,8 +514,8 @@ export class DetectionEngine {
             this.evaluate(now, 0, lostFor, null);
         }
 
-        const perclos = this.currentPerclos(now, null).perclos;
-        sessionStats.sample(now, 0, perclos, this.state);
+        const perclosResult = this.currentPerclos(now, null);
+        sessionStats.sample(now, 0, perclosResult.perclos, this.state);
         this.heartbeatIfAlarm(now);
 
         metricsStore.publish({
@@ -479,9 +523,10 @@ export class DetectionEngine {
             state: this.state,
             reason: this.reason,
             facePresent: false,
+            visionQuality: quality,
             faceLostForMs: lostFor,
-            perclos,
-            blinkRate: this.blinkDetector.getBlinkRate(now),
+            perclos: perclosResult.perclos,
+            blinkRate: this.blinkDetector.getBlinkRate(now, perclosResult.validObservedMs),
             threshold: calibrationManager.getThreshold(),
             preset: this.presetName,
         });
@@ -492,6 +537,7 @@ export class DetectionEngine {
         this.sessionStart(now);
         sessionStats.markStarted(now);
         this.blinkDetector.markStarted();
+        this.perclosTracker.markObservationStart(now);
 
         if (!this.facePresent) {
             this.facePresent = true;
@@ -554,7 +600,7 @@ export class DetectionEngine {
         }
 
         const perclosResult = this.currentPerclos(now, closedNow ? eyeUpdate.closedForMs : null);
-        const blinkRate = this.blinkDetector.getBlinkRate(now);
+        const blinkRate = this.blinkDetector.getBlinkRate(now, perclosResult.validObservedMs);
         this.lastFeatureVector = featureExtractor.extract(frame, now, {
             perclos: perclosResult.perclos,
             blinkRate,
@@ -571,6 +617,7 @@ export class DetectionEngine {
             state: this.state,
             reason: this.reason,
             facePresent: true,
+            visionQuality: frame.quality,
             faceLostForMs: 0,
             eyesClosed: eyeUpdate.closed,
             closedForMs: eyeUpdate.closedForMs,
@@ -619,6 +666,7 @@ export class DetectionEngine {
             live && isEyeClosedish(live.eyeState) ? closedForMs : null,
         );
         const perclos = perclosResult.perclos;
+        const perclosValid = perclosResult.sufficient;
 
         // ML score: manter se fresco. Em ALARM, tolera um score mais velho
         // (até ML_STALE_DURING_ALARM_MS) para a histerese sobreviver a um
@@ -630,12 +678,13 @@ export class DetectionEngine {
         this.lastMlScore = (mlFresh || mlToleratedDuringAlarm) ? mlResult.score : null;
 
         const trendFraction = this.earTrendTracker.computeFraction(calibrationManager.getBaseline());
-        const slowBlinksActive = this.blinkDetector.isSlowBlinksActive(now);
+        const slowBlinksActive = this.blinkDetector.isSlowBlinksActive(now, perclosResult.validObservedMs);
         const faceLost = this.faceLostReported || faceLostForMs >= this.config.faceLostWarnMs;
 
         const fusion = fuseSignals(
             {
                 perclos,
+                perclosValid,
                 yawnActive: live?.yawnActive ?? false,
                 headDropped: live?.headDropped ?? false,
                 faceLost,
@@ -658,11 +707,17 @@ export class DetectionEngine {
                 : true;
             const eyesClosed = live !== null && isEyeClosedish(live.eyeState);
 
+            // PERCLOS sem observação suficiente não pode BLOQUEAR a liberação
+            // do alarme — do contrário uma razão calculada sobre poucos
+            // segundos (logo após um ackAlarm, por exemplo) prenderia o
+            // hardware ligado. Mesma regra de validade usada na fusão.
+            const perclosForRelease = perclosValid ? perclos : 0;
+
             if (
                 fusion.state !== 'ALARM' &&
                 mlRelease &&
                 !eyesClosed &&
-                perclos < this.config.perclosReleaseLevel
+                perclosForRelease < this.config.perclosReleaseLevel
             ) {
                 this.state = fusion.state === 'WARNING' ? 'WARNING' : 'NORMAL';
                 this.reason = fusion.state === 'WARNING' ? (fusion.primaryReason as WarningReason) : null;
@@ -708,8 +763,8 @@ export class DetectionEngine {
         // nível de entrada (default 80% do warn level).
         if (fusion.state !== 'WARNING' && this.state === 'WARNING') {
             const releaseFactor = this.config.warningReleaseFraction;
-            const slowBlinkRate = this.blinkDetector.getSlowBlinkRate(now);
-            const stillWarn = perclos >= this.config.perclosWarningLevel * releaseFactor ||
+            const slowBlinkRate = this.blinkDetector.getSlowBlinkRate(now, perclosResult.validObservedMs);
+            const stillWarn = (perclosValid && perclos >= this.config.perclosWarningLevel * releaseFactor) ||
                 closedForMs >= this.config.warnCloseMs * releaseFactor ||
                 (trendFraction !== null && trendFraction >= this.config.earTrendWarnFraction * releaseFactor) ||
                 slowBlinkRate >= this.config.slowBlinkRateThreshold * releaseFactor;

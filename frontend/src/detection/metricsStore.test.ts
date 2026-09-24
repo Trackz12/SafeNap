@@ -8,6 +8,7 @@ function m(overrides: Partial<DetectionMetrics> = {}): DetectionMetrics {
         ear: 0.32,
         perclos: 0.1,
         facePresent: true,
+        visionQuality: 'GOOD',
         faceLostForMs: 0,
         eyesClosed: false,
         closedForMs: 0,

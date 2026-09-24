@@ -139,9 +139,35 @@ export class MediaPipeManager {
                         if (analysis) {
                             calibrationManager.addSample(analysis.ear, analysis.noseDropRatio);
                             detectionEngine.processFrame(analysis);
+                        } else {
+                            // BUG CORRIGIDO (auditoria de qualidade, 2026-09-23,
+                            // achado nº 1): antes daqui NÃO SAÍA CHAMADA NENHUMA
+                            // quando o MediaPipe achava um rosto mas a geometria
+                            // era inutilizável (face pequena, landmark na borda,
+                            // valor não-finito). O quadro era silenciosamente
+                            // descartado, com duas consequências reais:
+                            //   1. `faceLostSince` nunca era setado, então o
+                            //      PerclosTracker não marcava o intervalo como
+                            //      perdido — o tempo entrava no denominador como
+                            //      observação válida sem contribuição de
+                            //      fechamento, diluindo o PERCLOS (falso negativo);
+                            //   2. `markUnknown()` nunca era chamado, então
+                            //      `closedSince` e o candidato a micro-sono
+                            //      SOBREVIVIAM ao intervalo. Olhos fechados +
+                            //      cabeça virando = ao voltar um quadro válido,
+                            //      `closedForMs` incluía todo o buraco → ALARME
+                            //      FALSO.
+                            // Rotear para o mesmo caminho de "sem EAR confiável"
+                            // é o correto: geometria ruim e rosto ausente são
+                            // indistinguíveis para fins de decisão ocular. A
+                            // diferença que importa para a UI é preservada via
+                            // VisionQuality: DEGRADED = "estou vendo você, mas
+                            // não confio no sinal dos olhos" (peça pra ajustar a
+                            // posição), LOST = "não vejo rosto nenhum".
+                            detectionEngine.processNoFace('DEGRADED');
                         }
                     } else {
-                        detectionEngine.processNoFace();
+                        detectionEngine.processNoFace('LOST');
                     }
                 }
             } catch (e) {

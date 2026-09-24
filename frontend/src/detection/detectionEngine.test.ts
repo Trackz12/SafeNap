@@ -3,11 +3,12 @@ import { DetectionEngine } from './detectionEngine';
 import { metricsStore } from './metricsStore';
 import { calibrationManager } from '../safety/calibrationManager';
 import { drowsinessModel } from '../ml/drowsinessModel';
+import { FakeClock } from './temporal/clock';
 import type { FrameAnalysis } from '../vision/frameAnalyzer';
 
 /** Frame de teste: EAR alto (olhos abertos), boca fechada, cabeça neutra. */
 function makeFrame(ear: number): FrameAnalysis {
-    return { ear, earL: ear, earR: ear, mouthAspect: 0.2, noseDropRatio: 0.3, yawRatio: 0 };
+    return { ear, earL: ear, earR: ear, mouthAspect: 0.2, noseDropRatio: 0.3, yawRatio: 0, quality: 'GOOD' };
 }
 
 describe('DetectionEngine presets', () => {
@@ -112,14 +113,31 @@ describe('DetectionEngine microsleep & EAR trend', () => {
         expect(m?.eyesClosed).toBe(false);
     });
 
-    it('processFrame com EAR muito baixo acumula streak de fechamento', () => {
-        // 6 frames seguidos "bem fechados" (EAR < threshold*0.55 = 0.14)
+    // MUDANÇA DE COMPORTAMENTO (achado nº 2): este teste PRECISOU avançar o
+    // relógio. Antes ele entregava 6 quadros no MESMO instante e o fechamento
+    // era confirmado, porque a regra contava QUADROS. Isso era exatamente a
+    // patologia corrigida: 6 quadros em 0 ms não são um fechamento de olho, e
+    // o mesmo código se comportava de forma diferente conforme o FPS da
+    // máquina. Agora a confirmação exige `closeConfirmMs` de tempo real.
+    it('processFrame com EAR muito baixo por tempo suficiente confirma o fechamento', () => {
+        const clock = new FakeClock(1_000_000);
+        const e = new DetectionEngine(clock);
+        // 6 quadros a 10 FPS (o ritmo real do laço de detecção) = 500ms abaixo
+        // do limiar, bem acima de closeConfirmMs=90.
         for (let i = 0; i < 6; i++) {
-            engine.processFrame(makeFrame(0.08));
+            clock.advance(100);
+            e.processFrame(makeFrame(0.08));
         }
         const m = metricsStore.get();
         expect(m).not.toBeNull();
         expect(m?.eyesClosed).toBe(true);
+    });
+
+    it('6 quadros no MESMO instante NÃO confirmam fechamento (independência de FPS)', () => {
+        const clock = new FakeClock(1_000_000);
+        const e = new DetectionEngine(clock);
+        for (let i = 0; i < 6; i++) e.processFrame(makeFrame(0.08));
+        expect(metricsStore.get()?.eyesClosed).toBe(false);
     });
 
     it('processNoFace publica métricas sem rosto', () => {
@@ -192,8 +210,15 @@ describe('DetectionEngine — robustez anti-falso-positivo EAR', () => {
 
     it('declínio gradual sustentado (não jitter) é detectado', () => {
         // Frames reais de fechamento confirmado continuam funcionando:
-        // sequência longa de EAR baixo deve fechar os olhos.
-        for (let i = 0; i < 8; i++) engine.processFrame(makeFrame(0.05));
+        // sequência longa de EAR baixo deve fechar os olhos. Requer avanço de
+        // relógio desde a auditoria de qualidade — ver o teste de
+        // independência de FPS acima.
+        const clock = new FakeClock(2_000_000);
+        const e = new DetectionEngine(clock);
+        for (let i = 0; i < 8; i++) {
+            clock.advance(100);
+            e.processFrame(makeFrame(0.05));
+        }
         const m = metricsStore.get();
         expect(m?.eyesClosed).toBe(true);
     });

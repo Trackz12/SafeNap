@@ -64,6 +64,16 @@ export const REASON_TIER: Record<DetectionReason, EvidenceTier> = {
 
 export interface FusionInputs {
     perclos: number;
+    /**
+     * `PerclosResult.sufficient` — houve observação válida suficiente pra a
+     * razão significar algo (auditoria de qualidade, 2026-09-23, achado nº 3).
+     * Quando `false`, o PERCLOS é IGNORADO por completo nas três camadas:
+     * não vira regra forte, não soma no score contínuo e não aparece em
+     * `contributingSignals`. Antes, um PERCLOS calculado sobre poucos segundos
+     * de observação tinha exatamente o mesmo peso de um calculado sobre a
+     * janela cheia de 60 s.
+     */
+    perclosValid: boolean;
     yawnActive: boolean;
     headDropped: boolean;
     faceLost: boolean;
@@ -130,7 +140,7 @@ function supportingScore(
     let warningSum = 0;
     let alarmSum = 0;
 
-    if (inputs.perclos >= thresholds.perclosWarn) {
+    if (inputs.perclosValid && inputs.perclos >= thresholds.perclosWarn) {
         const intensity = ramp(inputs.perclos, thresholds.perclosWarn, thresholds.perclosAlarm);
         const s = intensity * WEIGHTS.perclos;
         warningSum += s;
@@ -204,7 +214,7 @@ function strongRuleReasons(
     thresholds: FusionThresholds,
 ): { ruleWarn: WarningReason | null; ruleAlarm: AlarmReason | null } {
     let ruleWarn: WarningReason | null = null;
-    if (inputs.perclos >= thresholds.perclosWarn) ruleWarn = 'PERCLOS';
+    if (inputs.perclosValid && inputs.perclos >= thresholds.perclosWarn) ruleWarn = 'PERCLOS';
     else if (inputs.yawnActive) ruleWarn = 'YAWN';
     else if (inputs.headDropped) ruleWarn = 'HEAD_DROP';
     else if (inputs.faceLost) ruleWarn = 'FACE_LOST';
@@ -215,7 +225,7 @@ function strongRuleReasons(
     let ruleAlarm: AlarmReason | null = null;
     if (inputs.microsleepMeetsThreshold) ruleAlarm = 'MICROSLEEP';
     else if (inputs.closedForMs >= thresholds.alarmCloseMs) ruleAlarm = 'EYES_CLOSED_DURATION';
-    else if (inputs.perclos >= thresholds.perclosAlarm) ruleAlarm = 'PERCLOS_CRITICAL';
+    else if (inputs.perclosValid && inputs.perclos >= thresholds.perclosAlarm) ruleAlarm = 'PERCLOS_CRITICAL';
 
     return { ruleWarn, ruleAlarm };
 }
@@ -223,8 +233,8 @@ function strongRuleReasons(
 /** Todos os sinais fisicamente ativos neste frame — para `contributingSignals` (explicabilidade). */
 function activeSignals(inputs: FusionInputs, thresholds: FusionThresholds): DetectionReason[] {
     const active: DetectionReason[] = [];
-    if (inputs.perclos >= thresholds.perclosAlarm) active.push('PERCLOS_CRITICAL');
-    else if (inputs.perclos >= thresholds.perclosWarn) active.push('PERCLOS');
+    if (inputs.perclosValid && inputs.perclos >= thresholds.perclosAlarm) active.push('PERCLOS_CRITICAL');
+    else if (inputs.perclosValid && inputs.perclos >= thresholds.perclosWarn) active.push('PERCLOS');
     if (inputs.yawnActive) active.push('YAWN');
     if (inputs.headDropped) active.push('HEAD_DROP');
     if (inputs.faceLost) active.push('FACE_LOST');

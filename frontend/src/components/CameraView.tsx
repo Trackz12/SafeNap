@@ -220,10 +220,14 @@ export const CameraView: React.FC = () => {
     const statusColor = isActive
         ? (metrics.eyesClosed ? 'var(--alarm)' : 'var(--primary)')
         : 'var(--text-faint)';
+    // `visionQuality` distingue "não vejo rosto" de "vejo você, mas a
+    // geometria não serve pro sinal dos olhos" (perfil acentuado, muito longe,
+    // rosto cortado na borda). São ações diferentes para quem está testando:
+    // aparecer na câmera vs. ajustar a posição. Ver detection/vision/visionQuality.ts.
     const statusLabel = isActive
         ? (metrics.facePresent
             ? (metrics.eyesClosed ? 'Olhos fechados' : 'Monitorando')
-            : 'Sem rosto')
+            : metrics.visionQuality === 'DEGRADED' ? 'Ajuste a posição' : 'Sem rosto')
         : 'Inativo';
     const statusBadge = isActive
         ? (metrics.eyesClosed ? 'badge-red' : 'badge-green')

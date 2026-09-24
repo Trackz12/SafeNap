@@ -3,7 +3,14 @@ import { EyeStateDetector } from './eyeStateDetector';
 import { FakeClock } from '../temporal/clock';
 
 const THRESHOLD = 0.21;
-const CONFIG = { closeConfirmFrames: 3, hysteresisFactor: 1.15, smoothingWindow: 3 };
+// Preset `standard` pós-auditoria de qualidade: confirmação por TEMPO (90ms)
+// com piso de 2 quadros, em vez de contagem de 3 quadros.
+const CONFIG = {
+    closeConfirmMs: 90,
+    closeConfirmMinFrames: 2,
+    hysteresisFactor: 1.15,
+    smoothingWindow: 3,
+};
 
 describe('EyeStateDetector — estado isolado, sem side effects', () => {
     let clock: FakeClock;
@@ -34,14 +41,18 @@ describe('EyeStateDetector — estado isolado, sem side effects', () => {
         expect(r1.closed).toBe(false);
         clock.advance(33);
         const r2 = detector.update(0.05, THRESHOLD);
-        expect(r2.state).toBe('CLOSING'); // 2º quadro, closeConfirmFrames=3
+        // 2º quadro: piso de quadros satisfeito (2), mas só 33ms abaixo do
+        // limiar — falta tempo para os 90ms de closeConfirmMs.
+        expect(r2.state).toBe('CLOSING');
     });
 
     it('piscada normal: OPEN → CLOSING → CLOSED → OPEN, fecha o segmento com a duração certa', () => {
         for (let i = 0; i < 5; i++) { clock.advance(33); detector.update(0.35, THRESHOLD); }
-        // Fecha por ~120ms reais (4 quadros de 33ms ≈ 132ms fechado, dentro da faixa normal de piscada).
+        // 5 quadros de 33ms. O 1º é absorvido pela mediana-3 (buffer ainda
+        // cheio de 0.35), então a contagem de tempo abaixo do limiar começa no
+        // 2º; com closeConfirmMs=90 a confirmação sai no 5º (99ms abaixo).
         let last;
-        for (let i = 0; i < 4; i++) { clock.advance(33); last = detector.update(0.05, THRESHOLD); }
+        for (let i = 0; i < 5; i++) { clock.advance(33); last = detector.update(0.05, THRESHOLD); }
         expect(last!.state).toBe('CLOSED');
         expect(last!.closedForMs).toBeGreaterThan(0);
 
@@ -58,7 +69,11 @@ describe('EyeStateDetector — estado isolado, sem side effects', () => {
     });
 
     it('zona de histerese (ear suavizado entre threshold e threshold*hysteresisFactor) reporta OPENING, ainda closed=true', () => {
-        for (let i = 0; i < 3; i++) { clock.advance(33); detector.update(0.05, THRESHOLD); }
+        // 4 quadros de 33ms = 99ms abaixo do limiar (>= closeConfirmMs=90).
+        // Com a regra antiga (3 quadros) bastavam 3; agora o que conta é o
+        // tempo decorrido, e 3 quadros a 30 FPS são só 66ms.
+        for (let i = 0; i < 4; i++) { clock.advance(33); detector.update(0.05, THRESHOLD); }
+        expect(detector.getState()).toBe('CLOSED'); // pré-condição do cenário
         // O EAR reportado é o SUAVIZADO (mediana-3): precisa de 2 leituras de
         // 0.22 pra dominar a mediana (buffer [0.05,0.22,0.22] -> mediana 0.22),
         // dentro da zona-morta: > threshold(0.21), < threshold*1.15(0.2415).
