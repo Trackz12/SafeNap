@@ -262,7 +262,7 @@ Testes: `drowsinessModel.test.ts` (ignorado por padrão / prioridade só no modo
 
 | Tipo | O que responde | Estado |
 |---|---|---|
-| **Software** | O código faz o que a especificação diz? (testes unitários, paridade Python↔TS, Python↔ONNX, integração, build) | Feito e automatizado (Vitest 219, pytest 96, `tsc -b`, build) |
+| **Software** | O código faz o que a especificação diz? (testes unitários, paridade Python↔TS, Python↔ONNX, integração, build) | Feito e automatizado (Vitest 284, e2e 16, pytest 139 backend + 89 ML, `tsc -b`, build) |
 | **Visão** | O EAR/landmarks distinguem olho aberto de fechado em pessoas reais? | Feito **só para estado do olho**, no CEW (`reports/ear_validation/`). **Não** é validação de sonolência. |
 | **Modelo de drowsiness** | O classificador separa sonolento de alerta em pessoas que ele nunca viu? | **Não executado.** Exige dataset com rótulo de sonolência (UTA-RLDD / NTHU-DDD). |
 | **Condições reais** | Funciona com condutores reais, em direção real, com o hardware? | **Não realizado.** |
@@ -271,7 +271,49 @@ O ONNX embarcado continua **EXPERIMENTAL** (treinado só em dados sintéticos; `
 
 > **Detalhe operacional, auditoria dos adaptadores, integridade e procedimento de 17 passos: `docs/DATASET_PIPELINE.md`.**
 
-### 13.2 Do vídeo ao modelo
+### 13.2 Levantamento de datasets públicos (2026-09-24)
+
+Pergunta que motivou o levantamento: "conseguimos buscar um dataset público e
+treinar?". A resposta curta é **não sem ação do pesquisador**, e a razão é
+técnica antes de ser burocrática.
+
+**Restrição técnica que elimina a maioria dos datasets "abertos":** 7 das 18
+features são **temporais** (`earMean`, `earStdDev`, `earMin`, `earMax`,
+`earTrendPerSec`, `mouthTrendPerSec`, `noseDropMean` sobre a janela, mais
+`blinkRate`, `msSinceLastBlink` e `perclos` de contexto). Elas só existem sobre
+uma sequência de quadros. **Datasets de imagem estática não servem para treinar
+este modelo**, por mais abertos que sejam — nenhuma foto isolada tem taxa de
+piscada ou PERCLOS. Isso descarta CEW, MRL Eye, DrowsyFace, os vários "Driver
+Drowsiness Dataset" do Kaggle/Roboflow e o dataset anotado em Raspberry Pi: são
+todos coleções de imagens.
+
+(O CEW continua útil e já é usado — mas para validar o **estado do olho** por
+EAR, não o classificador de sonolência. Ver a tabela de §13.1.)
+
+**Datasets de vídeo com rótulo de sonolência — estado de acesso verificado:**
+
+| Dataset | Acesso | Observação |
+|---|---|---|
+| **UTA-RLDD** | Formulário ao autor | ~30 h de vídeo, 60 sujeitos, 3 classes. Adaptador já escrito (`ml/dataset_adapters/uta_rldd.py`). Os IDs de download no script são `FILL_ME` de propósito. |
+| **NTHU-DDD** | Aprovação acadêmica | Rótulo por quadro. Adaptador já escrito (`nthu_ddd.py`). |
+| **UL-DD** | Conta Zenodo + e-mail institucional + declaração de propósito + acordo de uso | **8,0 TB**. 19 sujeitos, rótulo KSS a cada 4 min (estado gradual, não alerta/sonolento discreto). Inviável de baixar aqui mesmo com acesso. |
+| **SUST-DDD** | Registro Zenodo contém **apenas o artigo**, não os dados | Precisa contato com os autores. |
+| **DROZY, DMD** | Formulário / acordo | Não inspecionados em detalhe. |
+
+**Conclusão:** o gargalo não é encontrar um dataset, é que todo dataset adequado
+exige um acordo de uso assinado por uma pessoa com vínculo institucional. Esse
+passo **não pode ser automatizado nem delegado** — depende de e-mail
+institucional e de aceite de termos em nome do pesquisador. O caminho recomendado
+é o UTA-RLDD (menor, adaptador já pronto, rótulo binarizável), solicitado ao
+autor; assim que os vídeos existirem em disco, o procedimento de 17 passos de
+`docs/DATASET_PIPELINE.md` leva de manifesto a ONNX sem código novo.
+
+**Atenção ao rótulo do UTA-RLDD:** o rótulo vale para ~10 min de vídeo inteiro,
+não por instante. Trechos despertos dentro de um vídeo "sonolento" viram ruído de
+rótulo — limitação já registrada no adaptador, a considerar na leitura de
+qualquer métrica que sair dali.
+
+### 13.3 Do vídeo ao modelo
 
 ```
 dataset real → build_manifest.py (adaptador por dataset) → manifest.csv (video,subject_id,label,source_label,...)
