@@ -1,6 +1,33 @@
-# SAFENAP Web
+# SafeNap
 
-Sistema moderno de detecção de sonolência no navegador utilizando MediaPipe. A aplicação aciona um Arduino Nano através de um backend FastAPI via WebSocket e PySerial.
+Sistema de detecção de sonolência ao volante. A câmera é processada no próprio navegador com visão computacional (MediaPipe), sem enviar vídeo a nenhum servidor, e quando há sinais de sono um backend em FastAPI aciona um Arduino que alerta o motorista com som, vibração e luz.
+
+Projeto de TCC do curso Técnico em Automação Industrial do IFSP, campus Sertãozinho, apresentado em artigos no CONICT 2025 e 2026 (`docs/artigo/`).
+
+## O que ele faz
+
+- Detecta em tempo real sinais de sonolência pelo rosto do motorista, direto no navegador.
+- Envia o estado ao backend por WebSocket; o backend fala com o Arduino pela porta serial (PySerial).
+- No Arduino Nano: buzzer, 4 motores de vibração, LED e um sensor de pressão (FSR-402) na empunhadura do volante.
+- Pipeline de Machine Learning em Python (extração de características, treino, avaliação e exportação para ONNX), ainda experimental.
+
+## Tecnologias
+
+React, TypeScript e Vite · MediaPipe Tasks Vision · Python, FastAPI e PySerial · Arduino (C++) · Vitest e pytest
+
+Testes automatizados: 219 no frontend e 96 no pipeline de ML.
+
+## Documentação
+
+- [Arquitetura](docs/ARCHITECTURE.md)
+- [Detecção](docs/DETECTION.md)
+- [Protocolo do WebSocket](docs/WEBSOCKET_PROTOCOL.md)
+- [Hardware](docs/HARDWARE.md)
+- [Pipeline de ML](docs/ML_PIPELINE.md) e [datasets](docs/DATASET_PIPELINE.md)
+
+## Autor
+
+Lucas Cândido · [site](https://lucas-candido.vercel.app) · [LinkedIn](https://www.linkedin.com/in/lucas-candido-martins-0096552b7)
 
 ## Estrutura
 - **Frontend**: React + Vite + TypeScript (Processamento da câmera e visão).
